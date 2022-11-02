@@ -1,14 +1,25 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
+extern crate curve25519_dalek as curve;
+extern crate rand;
+
+use curve::constants::RISTRETTO_BASEPOINT_POINT;
+use curve::ristretto::{CompressedRistretto, RistrettoPoint};
+use curve::scalar::Scalar;
+use rand::rngs::StdRng;
+
+pub struct Verifier {
+    
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+pub struct Prover {
+    witness: Scalar,
 }
+
+impl Prover {
+
+}
+
+pub struct Schnorr {
+    
+}
+
+

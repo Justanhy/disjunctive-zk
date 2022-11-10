@@ -7,3 +7,6 @@ edition = "2021"
 
 [dependencies]
 schnorr = { path = "../libs/schnorr" }
+curve25519-dalek = "4.0.0-pre.2"
+rand_chacha = "0.3"
+rand_core = "0.6"

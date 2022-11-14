@@ -11,6 +11,12 @@ use rand_core::SeedableRng;
 
 pub trait SigmaProtocol {
     fn simulator(&self) -> Transcript;
+    fn with_simulator<T>(
+        &self,
+        sim: fn(T) -> (Scalar, Scalar),
+        args: T,
+    ) -> Transcript;
+    fn init(witness: Scalar) -> Self;
 }
 
 pub struct Transcript {
@@ -27,9 +33,8 @@ pub struct Transcript {
 // impl Prover {}
 
 pub struct Schnorr {
-    witness: Scalar,
-    pub_key: RistrettoPoint,
-    generator: RistrettoPoint,
+    initialised: bool,
+    pub pub_key: RistrettoPoint,
     p_random: Scalar,
 }
 
@@ -38,37 +43,72 @@ impl SigmaProtocol for Schnorr {
         let proof = Scalar::random(&mut ChaCha20Rng::from_entropy());
         let challenge = Scalar::random(&mut ChaCha20Rng::from_entropy());
         Transcript {
-            commitment: self.generator * proof - challenge * self.pub_key,
+            commitment: RISTRETTO_BASEPOINT_POINT * proof
+                - challenge * self.pub_key,
             challenge,
             proof,
+        }
+    }
+
+    fn with_simulator<T>(
+        &self,
+        sim: fn(T) -> (Scalar, Scalar),
+        args: T,
+    ) -> Transcript {
+        let (challenge, proof) = sim(args);
+        Transcript {
+            commitment: RISTRETTO_BASEPOINT_POINT * proof
+                - challenge * self.pub_key,
+            challenge,
+            proof,
+        }
+    }
+
+    fn init(witness: Scalar) -> Self {
+        Schnorr {
+            initialised: true,
+            pub_key: RISTRETTO_BASEPOINT_POINT * witness,
+            p_random: Scalar::random(&mut ChaCha20Rng::from_entropy()),
         }
     }
 }
 
 impl Schnorr {
-    pub fn new(witness: Scalar) -> Self {
+    pub fn new() -> Self {
         Schnorr {
-            pub_key: RISTRETTO_BASEPOINT_POINT * witness,
-            witness: witness,
-            generator: RISTRETTO_BASEPOINT_POINT,
-            p_random: Scalar::random(&mut ChaCha20Rng::from_entropy()),
+            initialised: false,
+            pub_key: RistrettoPoint::default(),
+            p_random: Scalar::default(),
         }
     }
 
     pub fn commitment(&self) -> RistrettoPoint {
-        self.generator * self.p_random
+        assert!(self.initialised);
+        RISTRETTO_BASEPOINT_POINT * self.p_random
     }
 
     pub fn challenge(&self) -> Scalar {
+        assert!(self.initialised);
         Scalar::random(&mut ChaCha20Rng::from_entropy())
     }
 
-    pub fn prove(&self, challenge: &Scalar, provers_witness: &Scalar) -> Scalar {
+    pub fn prove(
+        &self,
+        challenge: &Scalar,
+        provers_witness: &Scalar,
+    ) -> Scalar {
+        assert!(self.initialised);
         challenge * provers_witness + self.p_random
     }
 
-    pub fn verify(&self, challenge: &Scalar, proof: &Scalar, commitment: &RistrettoPoint) -> bool {
-        let lhs = self.generator * proof;
+    pub fn verify(
+        &self,
+        commitment: &RistrettoPoint,
+        challenge: &Scalar,
+        proof: &Scalar,
+    ) -> bool {
+        assert!(self.initialised);
+        let lhs = RISTRETTO_BASEPOINT_POINT * proof;
         let rhs = commitment + challenge * self.pub_key;
         lhs == rhs
     }
@@ -84,38 +124,49 @@ mod tests {
 
     #[test]
     fn schnorr_works() {
-        let actual_witness = Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
-        let provers_witness = Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
-        let protocol = Schnorr::new(actual_witness);
+        let actual_witness =
+            Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
+        let provers_witness =
+            Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
+        let protocol = Schnorr::init(actual_witness);
         let commitment = protocol.commitment();
         let challenge = protocol.challenge();
         let proof = protocol.prove(&challenge, &provers_witness);
-        let result = protocol.verify(&challenge, &proof, &commitment);
+        let result = protocol.verify(&commitment, &challenge, &proof);
         assert!(result);
     }
 
     #[test]
     fn schnorr_fails() {
-        let actual_witness = Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
-        let provers_witness = Scalar::random(&mut ChaCha20Rng::from_seed([1u8; 32]));
-        let protocol = Schnorr::new(actual_witness);
+        let actual_witness =
+            Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
+        let provers_witness =
+            Scalar::random(&mut ChaCha20Rng::from_seed([1u8; 32]));
+        let protocol = Schnorr::init(actual_witness);
         let commitment = protocol.commitment();
         let challenge = protocol.challenge();
         let proof = protocol.prove(&challenge, &provers_witness);
-        let result = protocol.verify(&challenge, &proof, &commitment);
+        let result = protocol.verify(&commitment, &challenge, &proof);
         assert!(!result);
     }
 
     #[test]
     fn schnorr_simulator() {
         let witness = Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
-        let protocol = Schnorr::new(witness);
+        let protocol = Schnorr::init(witness);
         let transcript = protocol.simulator();
         let result = protocol.verify(
+            &transcript.commitment,
             &transcript.challenge,
             &transcript.proof,
-            &transcript.commitment,
         );
         assert!(result);
+    }
+
+    #[test]
+    fn uninitialized_schnorr() {
+        let protocol = Schnorr::new();
+        let result = std::panic::catch_unwind(|| protocol.commitment());
+        assert!(result.is_err());
     }
 }

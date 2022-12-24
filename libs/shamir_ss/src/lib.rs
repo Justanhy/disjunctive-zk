@@ -10,6 +10,8 @@
 // use ff::PrimeField;
 // use group::{Group, GroupEncoding, ScalarMul};
 // use rand_core::{CryptoRng, RngCore};
+mod lagrange;
+mod shamir_error;
 
 use core::{
     mem::MaybeUninit,
@@ -17,62 +19,40 @@ use core::{
 };
 use curve25519_dalek_ml::scalar::Scalar;
 use ed25519_dalek::SecretKey;
-use ff::PrimeField;
+use elliptic_curve::{ff::PrimeField, group::cofactor::CofactorCurveAffine};
+use lagrange::LagrangePolynomial;
 use rand_chacha::ChaCha20Rng;
-use rand_core::SeedableRng;
-use vsss_rs::{curve25519::WrappedScalar, Error, Shamir, Share};
-use x25519_dalek::StaticSecret;
+use rand_core::{CryptoRngCore, SeedableRng};
+use shamir_error::ShamirError;
+use vsss_rs::Error::{
+    InvalidSecret, InvalidShare, InvalidShareConversion,
+    SharingDuplicateIdentifier, SharingInvalidIdentifier,
+    SharingLimitLessThanThreshold, SharingMaxRequest, SharingMinThreshold,
+};
+use vsss_rs::{curve25519::WrappedScalar, Shamir, Share};
 
-trait WithSecret<const T: usize, const N: usize> {
-    fn combine_with_secret<F, S, const SS: usize>(
-        shares: &[Share<SS>],
-        f: fn(&[u8]) -> Option<S>,
-    ) -> Result<S, Error>
+pub trait WithShares<const T: usize, const N: usize> {
+    fn split_secret_filling_shares<F, R, const S: usize, const D: usize>(
+        secret: F,
+        shares: &[Share<S>],
+        active_clause_index: [F; D],
+    ) -> Result<[Share<S>; D], ShamirError>
     where
         F: PrimeField,
-        S: Default + Copy + AddAssign + Mul<F, Output = S>;
+        R: CryptoRngCore;
 
-    fn interpolate<F, S>(x_coordinates: &[F], y_coordinates: &[S]) -> S
-    where
-        F: PrimeField,
-        S: Default + Copy + AddAssign + Mul<F, Output = S>,
-    {
-        let limit = x_coordinates.len();
-        // Initialize to zero
-        let mut result = S::default();
-
-        for i in 0..limit {
-            let mut basis = F::ONE;
-            for j in 0..limit {
-                if i == j {
-                    continue;
-                }
-
-                let mut denom: F = x_coordinates[j] - x_coordinates[i];
-                denom = denom
-                    .invert()
-                    .unwrap();
-                // x_m / (x_m - x_j) * ...
-                basis *= x_coordinates[j] * denom;
-            }
-
-            result += y_coordinates[i] * basis;
-        }
-        result
-    }
-
-    fn check_params<F>(secret: Option<F>) -> Result<(), Error>
+    fn check_params<F>(secret: Option<F>) -> Result<(), ShamirError>
     where
         F: PrimeField,
     {
         if N < T {
-            return Err(Error::SharingLimitLessThanThreshold);
+            return Err(ShamirError::Error(SharingLimitLessThanThreshold));
         }
         if T < 2 {
-            return Err(Error::SharingMinThreshold);
+            return Err(ShamirError::Error(SharingMinThreshold));
         }
         if N > 255 {
-            return Err(Error::SharingMaxRequest);
+            return Err(ShamirError::Error(SharingMaxRequest));
         }
         if secret.is_some()
             && secret
@@ -81,56 +61,85 @@ trait WithSecret<const T: usize, const N: usize> {
                 .unwrap_u8()
                 == 1u8
         {
-            return Err(Error::InvalidShare);
+            return Err(ShamirError::Error(InvalidShare));
         }
         Ok(())
     }
 }
 
-impl<const T: usize, const N: usize> WithSecret<T, N> for Shamir<T, N> {
-    fn combine_with_secret<F, S, const SS: usize>(
-        shares: &[Share<SS>],
-        f: fn(&[u8]) -> Option<S>,
-    ) -> Result<S, Error>
+fn u32_to_field<F: PrimeField>(x: &u32) -> Result<F, ShamirError> {
+    let mut repr = F::Repr::default();
+    repr.as_mut()
+        .copy_from_slice(
+            x.to_be_bytes()
+                .as_ref(),
+        );
+    let res = F::from_repr(repr);
+    if res
+        .is_some()
+        .unwrap_u8()
+        == 1u8
+    {
+        Ok(res.unwrap())
+    } else {
+        Err(ShamirError::Error(InvalidShare))
+    }
+}
+
+impl<const T: usize, const N: usize> WithShares<T, N> for Shamir<T, N> {
+    fn split_secret_filling_shares<F, R, const S: usize, const D: usize>(
+        secret: F,
+        shares: &[Share<S>],
+        active_clause_index: [F; D],
+    ) -> Result<[Share<S>; D], ShamirError>
     where
         F: PrimeField,
-        S: Default + Copy + AddAssign + Mul<F, Output = S>,
+        R: CryptoRngCore,
     {
-        Self::check_params::<F>(None)?;
-
-        if shares.len() < T {
-            return Err(Error::SharingMinThreshold);
+        Self::check_params(Some(secret))?;
+        let k = shares.len();
+        if k != T - 1 {
+            return Err(ShamirError::InvalidUnqualifiedSet);
         }
-        let mut dups = [false; N];
+
         let mut x_coordinates = [F::default(); T];
-        let mut y_coordinates = [S::default(); T];
+        let mut y_coordinates = [F::default(); T];
 
-        for (i, s) in shares
-            .iter()
-            .enumerate()
-            .take(T)
-        {
-            let identifier = s.identifier();
+        x_coordinates[0] = F::zero();
+        y_coordinates[0] = secret;
 
-            if dups[identifier as usize - 1] {
-                return Err(Error::SharingDuplicateIdentifier);
+        for i in 0..k {
+            let x = shares[i].identifier();
+            if x == 0 {
+                return Err(ShamirError::Error(InvalidShare));
             }
-            if s.is_zero() {
-                return Err(Error::InvalidShare);
+            let val = shares[i].as_field_element();
+            if val.is_err() {
+                return Err(ShamirError::Error(InvalidShareConversion));
             }
-            dups[identifier as usize - 1] = true;
-
-            let y = f(s.value());
-            match y {
-                Some(y) => {
-                    x_coordinates[i] = F::from(identifier as u64);
-                    y_coordinates[i] = y;
-                }
-                None => return Err(Error::InvalidShare),
-            }
+            x_coordinates[i + 1] = F::from(x as u64);
+            y_coordinates[i + 1] = val.unwrap();
         }
-        let secret = Self::interpolate(&x_coordinates, &y_coordinates);
-        Ok(secret)
+
+        let poly = LagrangePolynomial::init(x_coordinates, y_coordinates);
+
+        let mut challenges: [Share<S>; D] = [Share::default(); D];
+
+        for i in 0..D {
+            let x = active_clause_index[i];
+            let y = poly.interpolate(x);
+            let mut t = [0u8; S];
+            t[0] = x
+                .to_repr()
+                .as_ref()[0];
+            t[1..].copy_from_slice(
+                y.to_repr()
+                    .as_ref(),
+            );
+            challenges[i] = Share(t);
+        }
+
+        Ok(challenges)
     }
 }
 
@@ -138,6 +147,7 @@ impl<const T: usize, const N: usize> WithSecret<T, N> for Shamir<T, N> {
 mod tests {
 
     use super::*;
+    use x25519_dalek::StaticSecret;
 
     #[test]
     fn it_works() {
@@ -145,17 +155,52 @@ mod tests {
         let sc = Scalar::random(&mut rng);
         let sk1 = StaticSecret::from(sc.to_bytes());
         let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
-        let res = Shamir::<2, 3>::split_secret::<WrappedScalar, ChaCha20Rng, 33>(
+        const N: usize = 10; // Total number of clauses
+        const T: usize = 7; // Threshold of Shamir
+        const D: usize = 4; // Number of active clauses
+        const SHARESIZE: usize = 33; // Size of each share
+        let starting_shares: [Share<SHARESIZE>; T - 1] = [
+            Share([1u8; 33]),
+            Share([2u8; 33]),
+            Share([3u8; 33]),
+            Share([4u8; 33]),
+            Share([5u8; 33]),
+            Share([6u8; 33]),
+        ];
+        let res = Shamir::<T, N>::split_secret_filling_shares::<
+            WrappedScalar,
+            ChaCha20Rng,
+            SHARESIZE,
+            D,
+        >(
             sc.into(),
-            &mut rng,
+            &starting_shares,
+            [
+                WrappedScalar::from(7u64),
+                WrappedScalar::from(8u64),
+                WrappedScalar::from(9u64),
+                WrappedScalar::from(10u64),
+            ],
         );
-        assert!(res.is_ok());
-        let shares = res.unwrap();
+        debug_assert!(res.is_ok());
 
-        let res = Shamir::<2, 3>::combine_shares::<WrappedScalar, 33>(&shares);
-        assert!(res.is_ok());
+        let missing_shares = res.unwrap();
+        let mut all_shares = [Share::default(); N];
+
+        for i in 0..N {
+            if i < D {
+                // purposefully use missing shares first to test all of them
+                all_shares[i] = missing_shares[i];
+            } else {
+                all_shares[i] = starting_shares[i - D];
+            }
+        }
+
+        let res =
+            Shamir::<T, N>::combine_shares::<WrappedScalar, 33>(&all_shares);
+        debug_assert!(res.is_ok());
         let scalar = res.unwrap();
-        assert_eq!(scalar.0, sc);
+        debug_assert_eq!(scalar.0, sc);
         let sk2 = StaticSecret::from(
             scalar
                 .0
@@ -167,237 +212,38 @@ mod tests {
                 .to_bytes(),
         )
         .unwrap();
-        assert_eq!(sk2.to_bytes(), sk1.to_bytes());
-        assert_eq!(ske1.to_bytes(), ske2.to_bytes());
+        debug_assert_eq!(sk2.to_bytes(), sk1.to_bytes());
+        debug_assert_eq!(ske1.to_bytes(), ske2.to_bytes());
+    }
+
+    #[cfg(test)]
+    mod polynomial_tests {
+        use super::*;
+        use crate::lagrange::LagrangePolynomial;
+
+        #[test]
+        fn interpolate_works() {
+            let xs = [
+                WrappedScalar::from(1u64),
+                WrappedScalar::from(2u64),
+                WrappedScalar::from(5u64),
+            ];
+
+            let ys = [
+                WrappedScalar::from(1u64),
+                WrappedScalar::from(24u64),
+                WrappedScalar(Scalar::from_bytes_mod_order([
+                    66, 211, 245, 92, 26, 99, 18, 88, 214, 156, 247, 162, 222,
+                    249, 222, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    16,
+                ])),
+            ];
+
+            let poly = LagrangePolynomial::init(xs, ys);
+
+            let res = poly.interpolate(WrappedScalar::from(3u64));
+
+            debug_assert_eq!(res, WrappedScalar::from(3u64));
+        }
     }
 }
-
-// impl vsss_rs::Shamir {
-//     fn combine_with_secret<F, S>(
-//         &self,
-//         secret: Share,
-//         shares: &[Share],
-//         f: fn(&[u8]) -> Option<S>,
-//     ) -> Result<S, Error>
-//     where
-//         F: PrimeField,
-//         S: Default + Copy + AddAssign + Mul<F, Output = S>,
-//     {
-//         self.check_params::<F>(None)?;
-
-//         if shares.len() < self.t {
-//             return Err(Error::SharingMinThreshold);
-//         }
-
-//         let mut dups = BTreeSet::new();
-//         let mut x_coordinates = Vec::with_capacity(self.t);
-//         let mut y_coordinates = Vec::with_capacity(self.t);
-
-//         for s in shares
-//             .iter()
-//             .take(self.t)
-//         {
-//             let identifier = s.identifier();
-//             if identifier == 0 {
-//                 return Err(Error::SharingInvalidIdentifier);
-//             }
-//             if dups.contains(&(identifier as usize - 1)) {
-//                 return Err(Error::SharingDuplicateIdentifier);
-//             }
-//             if s.is_zero() {
-//                 return Err(Error::InvalidShare);
-//             }
-//             dups.insert(identifier as usize - 1);
-
-//             let y = f(s.value());
-//             if y.is_none() {
-//                 return Err(Error::InvalidShare);
-//             }
-//             x_coordinates.push(F::from(identifier as u64));
-//             y_coordinates.push(y.unwrap());
-//         }
-//         let secret = Self::interpolate(&x_coordinates, &y_coordinates);
-//         Ok(secret)
-//     }
-
-//     /// Create shares from a secret.
-//     /// F is the prime field
-//     /// S is the number of bytes used to represent F
-//     pub fn split_secret<F, R>(
-//         &self,
-//         secret: F,
-//         rng: &mut R,
-//     ) -> Result<Vec<Share>, Error>
-//     where
-//         F: PrimeField,
-//         R: RngCore + CryptoRng,
-//     {
-//         self.check_params(Some(secret))?;
-
-//         let (shares, _) = self.get_shares_and_polynomial(secret, rng);
-//         Ok(shares)
-//     }
-
-//     /// Reconstruct a secret from shares created from `split_secret`.
-//     /// The X-coordinates operate in `F`
-//     /// The Y-coordinates operate in `F`
-//     pub fn combine_shares<F>(&self, shares: &[Share]) -> Result<F, Error>
-//     where
-//         F: PrimeField,
-//     {
-//         self.combine::<F, F>(shares, bytes_to_field)
-//     }
-
-//     /// Reconstruct a secret from shares created from `split_secret`.
-//     /// The X-coordinates operate in `F`
-//     /// The Y-coordinates operate in `G`
-//     ///
-//     /// Exists to support operations like threshold BLS where the shares
-//     /// operate in `F` but the partial signatures operate in `G`.
-//     pub fn combine_shares_group<F, G>(
-//         &self,
-//         shares: &[Share],
-//     ) -> Result<G, Error>
-//     where
-//         F: PrimeField,
-//         G: Group + GroupEncoding + ScalarMul<F> + Default,
-//     {
-//         self.combine::<F, G>(shares, bytes_to_group)
-//     }
-
-//     fn combine<F, S>(
-//         &self,
-//         shares: &[Share],
-//         f: fn(&[u8]) -> Option<S>,
-//     ) -> Result<S, Error>
-//     where
-//         F: PrimeField,
-//         S: Default + Copy + AddAssign + Mul<F, Output = S>,
-//     {
-//         self.check_params::<F>(None)?;
-
-//         if shares.len() < self.t {
-//             return Err(Error::SharingMinThreshold);
-//         }
-
-//         let mut dups = BTreeSet::new();
-//         let mut x_coordinates = Vec::with_capacity(self.t);
-//         let mut y_coordinates = Vec::with_capacity(self.t);
-
-//         for s in shares
-//             .iter()
-//             .take(self.t)
-//         {
-//             let identifier = s.identifier();
-//             if identifier == 0 {
-//                 return Err(Error::SharingInvalidIdentifier);
-//             }
-//             if dups.contains(&(identifier as usize - 1)) {
-//                 return Err(Error::SharingDuplicateIdentifier);
-//             }
-//             if s.is_zero() {
-//                 return Err(Error::InvalidShare);
-//             }
-//             dups.insert(identifier as usize - 1);
-
-//             let y = f(s.value());
-//             if y.is_none() {
-//                 return Err(Error::InvalidShare);
-//             }
-//             x_coordinates.push(F::from(identifier as u64));
-//             y_coordinates.push(y.unwrap());
-//         }
-//         let secret = Self::interpolate(&x_coordinates, &y_coordinates);
-//         Ok(secret)
-//     }
-
-//     pub(crate) fn get_shares_and_polynomial<F, R>(
-//         &self,
-//         secret: F,
-//         rng: &mut R,
-//     ) -> (Vec<Share>, Polynomial<F>)
-//     where
-//         F: PrimeField,
-//         R: RngCore + CryptoRng,
-//     {
-//         let polynomial = Polynomial::<F>::new(secret, rng, self.t);
-//         // Generate the shares of (x, y) coordinates
-//         // x coordinates are incremental from [1, N+1). 0 is reserved for the secret
-//         let mut shares = Vec::with_capacity(self.n);
-//         let mut x = F::one();
-//         for i in 0..self.n {
-//             let y = polynomial.evaluate(x, self.t);
-//             let mut t = Vec::with_capacity(
-//                 1 + y
-//                     .to_repr()
-//                     .as_ref()
-//                     .len(),
-//             );
-//             t.push((i + 1) as u8);
-//             t.extend_from_slice(
-//                 y.to_repr()
-//                     .as_ref(),
-//             );
-
-//             shares.push(Share(t));
-
-//             x += F::one();
-//         }
-//         (shares, polynomial)
-//     }
-
-//     /// Calculate lagrange interpolation
-//     fn interpolate<F, S>(x_coordinates: &[F], y_coordinates: &[S]) -> S
-//     where
-//         F: PrimeField,
-//         S: Default + Copy + AddAssign + Mul<F, Output = S>,
-//     {
-//         let limit = x_coordinates.len();
-//         // Initialize to zero
-//         let mut result = S::default();
-
-//         for i in 0..limit {
-//             let mut basis = F::one();
-//             for j in 0..limit {
-//                 if i == j {
-//                     continue;
-//                 }
-
-//                 let mut denom: F = x_coordinates[j] - x_coordinates[i];
-//                 denom = denom
-//                     .invert()
-//                     .unwrap();
-//                 // x_m / (x_m - x_j) * ...
-//                 basis *= x_coordinates[j] * denom;
-//             }
-
-//             result += y_coordinates[i] * basis;
-//         }
-//         result
-//     }
-
-//     pub(crate) fn check_params<F>(&self, secret: Option<F>) -> Result<(), Error>
-//     where
-//         F: PrimeField,
-//     {
-//         if self.n < self.t {
-//             return Err(Error::SharingLimitLessThanThreshold);
-//         }
-//         if self.t < 2 {
-//             return Err(Error::SharingMinThreshold);
-//         }
-//         if self.n > 255 {
-//             return Err(Error::SharingMaxRequest);
-//         }
-//         if secret.is_some()
-//             && secret
-//                 .unwrap()
-//                 .is_zero()
-//                 .unwrap_u8()
-//                 == 1u8
-//         {
-//             return Err(Error::InvalidShare);
-//         }
-//         Ok(())
-//     }
-// }

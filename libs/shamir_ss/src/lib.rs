@@ -13,23 +13,16 @@
 mod lagrange;
 mod shamir_error;
 
-use core::{
-    mem::MaybeUninit,
-    ops::{AddAssign, Mul},
-};
-use curve25519_dalek_ml::scalar::Scalar;
-use ed25519_dalek::SecretKey;
-use elliptic_curve::{ff::PrimeField, group::cofactor::CofactorCurveAffine};
+use elliptic_curve::ff::PrimeField;
 use lagrange::LagrangePolynomial;
-use rand_chacha::ChaCha20Rng;
-use rand_core::{CryptoRngCore, SeedableRng};
+use rand_core::CryptoRngCore;
 use shamir_error::ShamirError;
 use vsss_rs::Error::{
     InvalidSecret, InvalidShare, InvalidShareConversion,
     SharingDuplicateIdentifier, SharingInvalidIdentifier,
     SharingLimitLessThanThreshold, SharingMaxRequest, SharingMinThreshold,
 };
-use vsss_rs::{curve25519::WrappedScalar, Shamir, Share};
+use vsss_rs::{Shamir, Share};
 
 pub trait WithShares<const T: usize, const N: usize> {
     fn split_secret_filling_shares<F, R, const S: usize, const D: usize>(
@@ -64,25 +57,6 @@ pub trait WithShares<const T: usize, const N: usize> {
             return Err(ShamirError::Error(InvalidShare));
         }
         Ok(())
-    }
-}
-
-fn u32_to_field<F: PrimeField>(x: &u32) -> Result<F, ShamirError> {
-    let mut repr = F::Repr::default();
-    repr.as_mut()
-        .copy_from_slice(
-            x.to_be_bytes()
-                .as_ref(),
-        );
-    let res = F::from_repr(repr);
-    if res
-        .is_some()
-        .unwrap_u8()
-        == 1u8
-    {
-        Ok(res.unwrap())
-    } else {
-        Err(ShamirError::Error(InvalidShare))
     }
 }
 
@@ -147,14 +121,15 @@ impl<const T: usize, const N: usize> WithShares<T, N> for Shamir<T, N> {
 mod tests {
 
     use super::*;
-    use x25519_dalek::StaticSecret;
+    use curve25519_dalek_ml::scalar::Scalar;
+    use rand_chacha::ChaCha20Rng;
+    use rand_core::SeedableRng;
+    use vsss_rs::curve25519::WrappedScalar;
 
     #[test]
     fn it_works() {
         let mut rng = ChaCha20Rng::from_entropy();
         let sc = Scalar::random(&mut rng);
-        let sk1 = StaticSecret::from(sc.to_bytes());
-        let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
         const N: usize = 10; // Total number of clauses
         const T: usize = 7; // Threshold of Shamir
         const D: usize = 4; // Number of active clauses
@@ -199,27 +174,15 @@ mod tests {
         let res =
             Shamir::<T, N>::combine_shares::<WrappedScalar, 33>(&all_shares);
         debug_assert!(res.is_ok());
-        let scalar = res.unwrap();
-        debug_assert_eq!(scalar.0, sc);
-        let sk2 = StaticSecret::from(
-            scalar
-                .0
-                .to_bytes(),
-        );
-        let ske2 = SecretKey::from_bytes(
-            &scalar
-                .0
-                .to_bytes(),
-        )
-        .unwrap();
-        debug_assert_eq!(sk2.to_bytes(), sk1.to_bytes());
-        debug_assert_eq!(ske1.to_bytes(), ske2.to_bytes());
+        let combined_secret = res.unwrap();
+        debug_assert_eq!(combined_secret.0, sc);
     }
 
     #[cfg(test)]
     mod polynomial_tests {
-        use super::*;
         use crate::lagrange::LagrangePolynomial;
+        use curve25519_dalek_ml::scalar::Scalar;
+        use vsss_rs::curve25519::WrappedScalar;
 
         #[test]
         fn interpolate_works() {

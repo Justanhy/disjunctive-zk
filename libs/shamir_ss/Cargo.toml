@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-vsss-rs = "2.1.0"
+vsss-rs = { version="2.1.0", features=["std"] }
 curve25519-dalek-ml = "4.0.0"
 elliptic-curve = "0.12"
 rand = "0.8.4"

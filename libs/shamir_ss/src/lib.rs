@@ -11,7 +11,7 @@
 // use group::{Group, GroupEncoding, ScalarMul};
 // use rand_core::{CryptoRng, RngCore};
 mod lagrange;
-mod shamir_error;
+pub mod shamir_error;
 pub extern crate vsss_rs;
 
 use elliptic_curve::ff::PrimeField;
@@ -79,6 +79,8 @@ impl WithShares for Shamir {
         Self::check_params(self.n, self.t, Some(secret.to_owned()))?;
 
         if shares.len() != self.t - 1 {
+            dbg!(shares.len(), self.t);
+
             return Err(ShamirError::InvalidUnqualifiedSet);
         }
 

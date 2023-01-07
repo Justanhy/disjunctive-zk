@@ -135,7 +135,7 @@ impl SigmaTranscript for SchnorrTranscript {
 }
 
 impl SchnorrTranscript {
-    fn new() -> Self {
+    pub fn new() -> Self {
         SchnorrTranscript {
             commitment: None,
             challenge: None,
@@ -148,11 +148,11 @@ impl SchnorrTranscript {
     }
 
     pub fn is_commited(&self) -> bool {
-        self.commitment != None && self.challenge == None && self.proof == None
+        self.commitment != None
     }
 
     pub fn is_challenged(&self) -> bool {
-        self.commitment != None && self.challenge != None && self.proof == None
+        self.commitment != None && self.challenge != None
     }
 
     pub fn is_proven(&self) -> bool {
@@ -215,11 +215,10 @@ impl SigmaVerifier<SW, SA, SC, SZ, ChaCha20Rng> for SchnorrVerifier {
 #[derive(Debug, Clone, Copy)]
 pub struct Schnorr {
     pub pub_key: RistrettoPoint,
-    transcript: SchnorrTranscript,
 }
 
 impl SigmaProtocol for Schnorr {
-    type Statement = RistrettoPoint;
+    type Statement = Schnorr;
     type Witness = Scalar;
     type State = Scalar;
 
@@ -228,7 +227,7 @@ impl SigmaProtocol for Schnorr {
     type Z = Scalar;
 
     fn a<R: CryptoRngCore>(
-        _statement: &RistrettoPoint,
+        _statement: &Schnorr,
         _witness: &Scalar,
         prover_rng: &mut R,
     ) -> (Self::State, Self::A) {
@@ -242,50 +241,43 @@ impl SigmaProtocol for Schnorr {
     }
 
     fn z<R: CryptoRngCore>(
-        _statement: &RistrettoPoint,
-        state: &Scalar,
+        _statement: &Schnorr,
+        _state: &Scalar,
         witness: &Scalar,
         challenge: &Scalar,
-        _prover_rng: &mut R,
+        prover_rng: &mut R,
     ) -> Self::Z {
-        challenge * witness + state
+        challenge * witness + Scalar::random(prover_rng)
     }
 
     fn simulate(
-        statement: &RistrettoPoint,
+        statement: &Schnorr,
         challenge: &Scalar,
         z: &Scalar,
     ) -> Self::A {
-        &RISTRETTO_BASEPOINT_TABLE * z - challenge * statement
+        &RISTRETTO_BASEPOINT_TABLE * z - challenge * statement.pub_key
     }
 
     fn verify(
-        statement: &RistrettoPoint,
+        statement: &Schnorr,
         a: &RistrettoPoint,
         c: &Scalar,
         z: &Scalar,
     ) -> bool {
-        &RISTRETTO_BASEPOINT_TABLE * z - c * statement == *a
+        &RISTRETTO_BASEPOINT_TABLE * z - c * statement.pub_key == *a
     }
 }
 
 impl Schnorr {
     pub fn init(witness: SW) -> Self {
         let pub_key = RISTRETTO_BASEPOINT_POINT * witness;
-        Schnorr {
-            pub_key,
-            transcript: SchnorrTranscript::new(),
-        }
-    }
-
-    pub fn get_transcript(self) -> SchnorrTranscript {
-        self.transcript
+        Schnorr { pub_key }
     }
 
     pub fn simulator(self) -> SchnorrTranscript {
         let z = Scalar::random(&mut ChaCha20Rng::from_entropy());
         let c = Scalar::random(&mut ChaCha20Rng::from_entropy());
-        let a = Schnorr::simulate(&self.pub_key, &c, &z);
+        let a = Schnorr::simulate(&self, &c, &z);
         SchnorrTranscript {
             commitment: Some(a),
             challenge: Some(c),
@@ -310,16 +302,13 @@ mod tests {
         let prover = SchnorrProver::new(&provers_witness);
         let verifier = SchnorrVerifier::new();
 
-        let (state, commitment) = Schnorr::a(
-            &protocol.pub_key,
-            &provers_witness,
-            &mut prover.get_rng(),
-        );
+        let (state, commitment) =
+            Schnorr::a(&protocol, &provers_witness, &mut prover.get_rng());
 
         let challenge = Schnorr::challenge(&mut verifier.get_rng());
 
         let proof = Schnorr::z(
-            &protocol.pub_key,
+            &protocol,
             &state,
             &provers_witness,
             &challenge,
@@ -327,7 +316,7 @@ mod tests {
         );
 
         let result =
-            Schnorr::verify(&protocol.pub_key, &commitment, &challenge, &proof);
+            Schnorr::verify(&protocol, &commitment, &challenge, &proof);
         assert!(result);
     }
 
@@ -342,16 +331,13 @@ mod tests {
         let prover = SchnorrProver::new(&provers_witness);
         let verifier = SchnorrVerifier::new();
 
-        let (state, commitment) = Schnorr::a(
-            &protocol.pub_key,
-            &provers_witness,
-            &mut prover.get_rng(),
-        );
+        let (state, commitment) =
+            Schnorr::a(&protocol, &provers_witness, &mut prover.get_rng());
 
         let challenge = Schnorr::challenge(&mut verifier.get_rng());
 
         let proof = Schnorr::z(
-            &protocol.pub_key,
+            &protocol,
             &state,
             &provers_witness,
             &challenge,
@@ -359,7 +345,7 @@ mod tests {
         );
 
         let result =
-            Schnorr::verify(&protocol.pub_key, &commitment, &challenge, &proof);
+            Schnorr::verify(&protocol, &commitment, &challenge, &proof);
         assert!(!result);
     }
 
@@ -369,7 +355,7 @@ mod tests {
         let protocol = Schnorr::init(witness);
         let transcript = protocol.simulator();
         let result = Schnorr::verify(
-            &protocol.pub_key,
+            &protocol,
             &transcript
                 .commitment
                 .expect("Commitment not found"),

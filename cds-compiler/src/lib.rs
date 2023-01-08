@@ -6,9 +6,6 @@ extern crate rand_core;
 extern crate schnorr;
 extern crate shamir_ss;
 
-use curve25519_dalek::constants::{
-    RISTRETTO_BASEPOINT_POINT, RISTRETTO_BASEPOINT_TABLE,
-};
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 
@@ -22,7 +19,7 @@ use schnorr::{
 use shamir_ss::{
     vsss_rs::curve25519::WrappedScalar, Shamir, Share, WithShares,
 };
-use std::{any::Any, borrow::Borrow};
+use std::any::Any;
 
 type SW = Vec<Scalar>;
 type SA = Result<Vec<RistrettoPoint>, SchnorrError>;
@@ -276,7 +273,7 @@ impl CDS94 {
 
     pub fn second_message<R: CryptoRngCore>(
         &mut self,
-        witness: &Vec<Scalar>,
+        witnesses: &Vec<Scalar>,
         challenge: Scalar,
         active_clauses: &Vec<bool>,
         prover_rng: &mut R,
@@ -314,7 +311,7 @@ impl CDS94 {
                 let proof = Schnorr::z(
                     &self.protocols[i],
                     &Scalar::default(),
-                    &witness[i],
+                    &witnesses[i],
                     &transcript
                         .challenge
                         .expect("Challenge should be present"),
@@ -557,7 +554,7 @@ mod tests {
             _protocols,
             _provers,
             _verifiers,
-            actual_witnesses,
+            _actual_witnesses,
             _provers_witnesses,
             active_clauses,
         ) = test_init::<N, D>();
@@ -566,7 +563,7 @@ mod tests {
         let challenge = CDS94::challenge(&mut cdsverifier.get_rng());
         // Third message
         let proof = protocol.second_message(
-            &actual_witnesses,
+            cdsprover.borrow_witnesses(),
             challenge,
             &active_clauses,
             &mut cdsprover.get_rng(),
@@ -578,12 +575,12 @@ mod tests {
     fn cds_works() {
         // INIT //
         // number of clauses
-        const N: usize = 10;
-        const D: usize = 3;
+        const N: usize = 255;
+        const D: usize = 200;
         let (
             mut protocol,
-            prover,
-            verifier,
+            cdsprover,
+            cdsverifier,
             _protocols,
             _provers,
             _verifiers,
@@ -595,13 +592,13 @@ mod tests {
         // First message
         let commitment = protocol.first_message(&active_clauses);
         // Second message
-        let challenge = CDS94::challenge(&mut verifier.get_rng());
+        let challenge = CDS94::challenge(&mut cdsverifier.get_rng());
         // Third message
         let proof = protocol.second_message(
-            prover.borrow_witnesses(),
+            cdsprover.borrow_witnesses(),
             challenge,
             &active_clauses,
-            &mut prover.get_rng(),
+            &mut cdsprover.get_rng(),
         );
         assert!(CDS94::verify(&protocol, &commitment, &challenge, &proof));
     }

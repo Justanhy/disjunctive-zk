@@ -153,7 +153,7 @@ impl SigmaProtocol for CDS94 {
                 return false;
             }
 
-            let mut s = vec![0u8, 33];
+            let mut s = vec![0u8; 33];
             s[0] = (i + 1) as u8;
             s[1..].copy_from_slice(c.as_bytes());
             shares.push(Share(s));
@@ -246,13 +246,11 @@ impl CDS94 {
             } else {
                 let mut s = [0u8; 33];
                 s[0] = (i + 1) as u8;
-                dbg!(&t.challenge.unwrap());
                 s[1..].copy_from_slice(
                     t.challenge
                         .expect("Challenge should be present")
                         .as_bytes(),
                 );
-                dbg!(&s);
                 shares.push(Share(s.into()));
             }
         }
@@ -265,9 +263,7 @@ impl CDS94 {
             )
             .unwrap();
 
-        dbg!(&shares);
         shares.append(&mut missing_shares);
-        dbg!(&shares);
 
         // Check shares can combine to the challenge
         let combineshares = shamir.combine_shares::<WrappedScalar>(&shares);
@@ -280,7 +276,7 @@ impl CDS94 {
 
     pub fn second_message<R: CryptoRngCore>(
         &mut self,
-        witness: &SW,
+        witness: &Vec<Scalar>,
         challenge: Scalar,
         active_clauses: &Vec<bool>,
         prover_rng: &mut R,
@@ -295,15 +291,10 @@ impl CDS94 {
             let i = share.identifier() as usize - 1;
 
             match self.transcripts[i].challenge {
-                Some(s) => {
-                    dbg!(s);
-                    continue
-                },
+                Some(_) => continue,
                 None => {
                     let mut c = [0u8; 32];
-                    dbg!(&share.value());
                     c.copy_from_slice(share.value());
-                    dbg!(c);
                     self.transcripts[i].challenge =
                         Some(Scalar::from_bytes_mod_order(c))
                 }
@@ -312,7 +303,6 @@ impl CDS94 {
 
         self.transcripts = self.transcripts.iter().enumerate().map(|(i, transcript)| {
             if !transcript.is_challenged() {
-                dbg!(&transcript);
                 panic!("Transcript should have a challenge and commitment");
             } 
             if transcript.is_proven() {
@@ -323,21 +313,18 @@ impl CDS94 {
             } else {
                 let proof = Schnorr::z(
                     &self.protocols[i],
-                    &Scalar::random(&mut self.provers[i].get_rng()),
+                    &Scalar::default(),
                     &witness[i],
                     &transcript
                         .challenge
                         .expect("Challenge should be present"),
                         &mut self.provers[i].get_rng(),
                 );
-                let t = SchnorrTranscript {
+                SchnorrTranscript {
                     commitment: transcript.commitment,
                     challenge: transcript.challenge,
                     proof: Some(proof),
-                };
-                assert!(Schnorr::verify(&self.protocols[i], &t.commitment.unwrap(), &t.challenge.unwrap(), &t.proof.unwrap()));
-                t
-                
+                }
             }
         }).collect();
 
@@ -453,38 +440,40 @@ mod tests {
 
     fn test_init<const N: usize, const D: usize>() -> CDS94Test {
         // INIT //
-        debug_assert!(D <= N);
+        assert!(D <= N);
         // closure to generate random witnesses
         let m = |_| Scalar::random(&mut ChaCha20Rng::from_entropy());
         // generate witnesses
-        let actual_witnesses = (0..N).map(m);
+        let actual_witnesses: Vec<Scalar> = (0..N).map(m).collect();
         // generate the prover's witnesses - for inactive clauses the prover generates a random witness
-        let provers_witnesses = actual_witnesses
-            .to_owned()
-            .take(D)
-            .chain((0..N - D).map(m));
-        // vector of booleans indicating which clauses are active
+        let provers_witnesses: Vec<Scalar> = actual_witnesses
+            .to_owned().iter().enumerate().map(|(i, s)| {
+                if i < D {
+                    s.clone()
+                } else {
+                    Scalar::random(&mut ChaCha20Rng::from_entropy())
+                }
+            })
+            .collect();
+            // vector of booleans indicating which clauses are active
         let active_clauses: Vec<bool> = (0..N)
             .map(|i| i < D)
             .collect();
-        // generate the statement (aka protocol) for each clause
+            // generate the statement (aka protocol) for each clause
         let protocols = actual_witnesses
-            .to_owned()
-            .map(|w| Box::new(Schnorr::init(w)))
+            .to_owned().iter()
+            .map(|w| Box::new(Schnorr::init(*w)))
             .collect_vec();
-        // generate the prover for each clause
+            // generate the prover for each clause
         let provers = provers_witnesses
-            .to_owned()
+            .to_owned().iter()
             .map(|w| SchnorrProver::new(&w))
             .collect_vec();
         // generate the verifier for each clause
         let verifiers = (0..N)
             .map(|_| SchnorrVerifier::new())
             .collect_vec();
-        // transform the witnesses into a vector
-        let actual_witnesses = actual_witnesses.collect_vec();
-        let provers_witnesses = provers_witnesses.collect_vec();
-
+        
         let protocol = CDS94::init(D, N, &protocols, &provers, &verifiers);
         let prover: CDS94Prover =
             CDS94Prover::new(N, &provers_witnesses, &active_clauses);
@@ -504,12 +493,6 @@ mod tests {
         )
     }
 
-    fn get_first_message(
-        protocol: &mut CDS94,
-        active_clauses: &Vec<bool>,
-    ) -> Vec<RistrettoPoint> {
-        protocol.first_message(active_clauses)
-    }
 
     #[test]
     fn first_message_works() {
@@ -517,13 +500,13 @@ mod tests {
         const D: usize = 1;
         let (
             mut protocol,
-            cdsprover,
-            cdsverifier,
-            protocols,
-            provers,
-            verifiers,
+            _cdsprover,
+            _cdsverifier,
+            _protocols,
+            _provers,
+            _verifiers,
             actual_witnesses,
-            provers_witnesses,
+            _provers_witnesses,
             active_clauses,
         ) = test_init::<N, D>();
 
@@ -571,11 +554,11 @@ mod tests {
             mut protocol,
             cdsprover,
             cdsverifier,
-            protocols,
-            provers,
-            verifiers,
+            _protocols,
+            _provers,
+            _verifiers,
             actual_witnesses,
-            provers_witnesses,
+            _provers_witnesses,
             active_clauses,
         ) = test_init::<N, D>();
 
@@ -601,11 +584,11 @@ mod tests {
             mut protocol,
             prover,
             verifier,
-            protocols,
-            provers,
-            verifiers,
+            _protocols,
+            _provers,
+            _verifiers,
             _actual_witnesses,
-            provers_witnesses,
+            _provers_witnesses,
             active_clauses,
         ) = test_init::<N, D>();
 

@@ -16,7 +16,6 @@ pub extern crate vsss_rs;
 
 use elliptic_curve::ff::PrimeField;
 use lagrange::LagrangePolynomial;
-use rand_core::CryptoRngCore;
 use shamir_error::ShamirError;
 use vsss_rs::Error::{
     InvalidSecret, InvalidShare, InvalidShareConversion,

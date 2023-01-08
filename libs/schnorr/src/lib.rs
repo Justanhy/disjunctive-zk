@@ -247,6 +247,7 @@ impl SigmaProtocol for Schnorr {
         challenge: &Scalar,
         prover_rng: &mut R,
     ) -> Self::Z {
+        // TODO: Allow use with state (remove re-computation)
         challenge * witness + Scalar::random(prover_rng)
     }
 

@@ -41,51 +41,6 @@ pub struct CDS94 {
     verifiers: Vec<SchnorrVerifier>,
 }
 
-// impl SigmaTranscript<SA, SC, SZ> for CDS94Transcript {
-//     fn get_commitment(&self) -> SA {
-//         match self.commitment {
-//             Some(ref c) => Ok(c.clone()),
-//             None => Err(Error::UninitializedCommitment),
-//         }
-//     }
-
-//     fn get_challenge(&self) -> SC {
-//         match self.challenge {
-//             Some(c) => Ok(c),
-//             None => Err(Error::UninitializedChallenge),
-//         }
-//     }
-
-//     fn get_proof(&self) -> SZ {
-//         match self.proof {
-//             Some(ref p) => Ok(p.clone()),
-//             None => Err(Error::UninitializedProof),
-//         }
-//     }
-// }
-
-// impl CDS94Transcript {
-//     fn new() -> Self {
-//         Self {
-//             commitment: None,
-//             challenge: None,
-//             proof: None,
-//         }
-//     }
-
-//     fn is_commited(&self) -> bool {
-//         self.commitment != None && self.challenge == None && self.proof == None
-//     }
-
-//     fn is_challenged(&self) -> bool {
-//         self.commitment != None && self.challenge != None && self.proof == None
-//     }
-
-//     fn is_proven(&self) -> bool {
-//         self.commitment != None && self.challenge != None && self.proof != None
-//     }
-// }
-
 impl SigmaProtocol for CDS94 {
     type Statement = CDS94;
     type Witness = Vec<Box<dyn Any>>;
@@ -363,7 +318,6 @@ pub struct CDS94Prover {
     active_clauses: Vec<bool>,
     witnesses: Vec<Scalar>,
     prover_rng: ChaCha20Rng,
-    transcripts: Vec<SchnorrTranscript>,
 }
 
 impl SigmaProver<SW, SA, SC, SZ, ChaCha20Rng> for CDS94Prover {
@@ -386,7 +340,6 @@ impl CDS94Prover {
             witnesses: witnesses.to_owned(),
             active_clauses: active_clauses.to_owned(),
             prover_rng: ChaCha20Rng::from_entropy(),
-            transcripts: Vec::with_capacity(n),
         }
     }
 
@@ -507,7 +460,7 @@ mod tests {
             active_clauses,
         ) = test_init::<N, D>();
 
-        dbg!(&active_clauses);
+        // dbg!(&active_clauses);
 
         let commitments = protocol.first_message(&active_clauses);
         assert!(commitments.len() == N);
@@ -517,24 +470,24 @@ mod tests {
             &mut protocol.provers[0].get_rng(),
         );
         assert!(testc == commitments[0]);
-        dbg!(
-            commitments[0],
-            protocol.transcripts[0]
-                .commitment
-                .unwrap()
-        );
+        // dbg!(
+        //     commitments[0],
+        //     protocol.transcripts[0]
+        //         .commitment
+        //         .unwrap()
+        // );
         assert!(
             commitments[0]
                 == protocol.transcripts[0]
                     .commitment
                     .unwrap()
         );
-        dbg!(
-            commitments[1],
-            protocol.transcripts[1]
-                .commitment
-                .unwrap()
-        );
+        // dbg!(
+        //     commitments[1],
+        //     protocol.transcripts[1]
+        //         .commitment
+        //         .unwrap()
+        // );
         assert!(
             commitments[1]
                 == protocol.transcripts[1]

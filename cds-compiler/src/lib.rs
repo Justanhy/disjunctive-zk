@@ -1,10 +1,9 @@
-extern crate blsttc;
-extern crate curve25519_dalek_ml as curve25519_dalek;
+pub extern crate curve25519_dalek_ml as curve25519_dalek;
 extern crate itertools;
 extern crate rand_chacha;
 extern crate rand_core;
-extern crate schnorr;
-extern crate shamir_ss;
+pub extern crate schnorr;
+pub extern crate shamir_ss;
 
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
@@ -32,6 +31,7 @@ type SZ = Result<Vec<Scalar>, SchnorrError>;
 // type Sigma = SP<dyn Any, dyn Any, dyn Any, dyn Any>;
 type Sigma = Box<Schnorr>;
 
+#[derive(Clone, Debug)]
 pub struct CDS94 {
     pub threshold: usize,
     pub n: usize,
@@ -312,6 +312,7 @@ impl CDS94 {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct CDS94Prover {
     /// Needs to have index of active clauses
     /// Needs to have list of witnesses for each active clause
@@ -348,6 +349,8 @@ impl CDS94Prover {
     }
 }
 
+
+#[derive(Clone, Debug)]
 pub struct CDS94Verifier {
     verifier_rng: ChaCha20Rng,
 }
@@ -370,23 +373,24 @@ impl CDS94Verifier {
     }
 }
 
+pub type CDS94Test = (
+    CDS94,
+    CDS94Prover,
+    CDS94Verifier,
+    Vec<Box<Schnorr>>,
+    Vec<SchnorrProver>,
+    Vec<SchnorrVerifier>,
+    Vec<Scalar>,
+    Vec<Scalar>,
+    Vec<bool>,
+);
+
 #[cfg(test)]
-mod tests {
+pub mod tests {
 
     use super::*;
     use schnorr::{Schnorr, SchnorrProver};
 
-    type CDS94Test = (
-        CDS94,
-        CDS94Prover,
-        CDS94Verifier,
-        Vec<Box<Schnorr>>,
-        Vec<SchnorrProver>,
-        Vec<SchnorrVerifier>,
-        Vec<Scalar>,
-        Vec<Scalar>,
-        Vec<bool>,
-    );
 
     fn test_init<const N: usize, const D: usize>() -> CDS94Test {
         // INIT //

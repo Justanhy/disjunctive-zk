@@ -4,5 +4,8 @@
 			"path": "."
 		}
 	],
-	"settings": {}
+	"settings": {
+		"editor.fontFamily": "Fira Code, Consolas, 'Courier New', monospace",
+		"window.zoomLevel": -0.75
+	}
 }

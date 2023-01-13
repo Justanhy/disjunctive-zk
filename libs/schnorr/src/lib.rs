@@ -4,101 +4,21 @@ extern crate curve25519_dalek_ml as curve25519_dalek;
 extern crate rand;
 extern crate rand_chacha;
 extern crate rand_core;
-
-/// Re-export the error module
 pub mod error;
+pub mod sigma;
 
 use curve25519_dalek::constants::{
     RISTRETTO_BASEPOINT_POINT, RISTRETTO_BASEPOINT_TABLE,
 };
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
-pub use error::Error;
+use error::Error;
 use rand_chacha::ChaCha20Rng;
 use rand_core::{CryptoRngCore, SeedableRng};
-
-/// Trait for the transcripts in Sigma protocols
-/// A is the first message (the commitment of the Prover)
-/// C is the second message (sent by the Verifier)
-/// Z is the third message (sent by the Prover which the Verifier uses to validate the prover)
-/// These are generic types that the Sigma protocol concrete implementation will define
-pub trait SigmaTranscript {
-    type A; // Commitment (First round message)
-    type C; // Challenge (Second round message)
-    type Z; // Proof (Third round message)
-
-    fn get_commitment(&self) -> Result<Self::A, Error>;
-
-    fn get_challenge(&self) -> Result<Self::C, Error>;
-
-    fn get_proof(&self) -> Result<Self::Z, Error>;
-}
-
-/// Trait for provers in Sigma protocols
-pub trait SigmaProver<W, A, C, Z, R>
-where
-    R: CryptoRngCore,
-{
-    // type Transcript: SigmaTranscript;
-    type Protocol: SigmaProtocol;
-
-    fn get_rng(&self) -> R;
-}
-
-/// Trait for provers in Sigma protocols
-pub trait SigmaVerifier<W, A, C, Z, R>
-where
-    R: CryptoRngCore,
-{
-    // type Transcript: SigmaTranscript;
-    type Protocol: SigmaProtocol;
-
-    fn get_rng(&self) -> R;
-}
-
-/// Trait for Sigma protocols
-/// Transcript is the type of the transcript that the Sigma protocol will use
-pub trait SigmaProtocol {
-    type Statement; // Public key of the protocol
-    type Witness; // Private key of the protocol
-    type State; // State that generates commitment
-
-    type A; // First round message
-    type C; // Challenge
-    type Z; // Third round message
-
-    fn simulate(
-        statement: &Self::Statement,
-        challenge: &Self::C,
-        z: &Self::Z,
-    ) -> Self::A;
-
-    fn a<R: CryptoRngCore>(
-        statement: &Self::Statement,
-        witness: &Self::Witness,
-        prover_rng: &mut R,
-    ) -> (Self::State, Self::A);
-
-    fn challenge<R: CryptoRngCore>(verifier_rng: &mut R) -> Self::C;
-
-    fn z<R: CryptoRngCore>(
-        statement: &Self::Statement,
-        state: &Self::State,
-        witness: &Self::Witness,
-        challenge: &Self::C,
-        prover_rng: &mut R,
-    ) -> Self::Z;
-
-    fn verify(
-        statement: &Self::Statement,
-        a: &Self::A,
-        c: &Self::C,
-        z: &Self::Z,
-    ) -> bool;
-}
+use sigma::{SigmaProtocol, SigmaProver, SigmaTranscript, SigmaVerifier};
 
 /// Transcript for the Schnorr protocol
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct SchnorrTranscript {
     pub commitment: Option<RistrettoPoint>,
     pub challenge: Option<Scalar>,
@@ -222,32 +142,36 @@ pub struct Schnorr {
 impl SigmaProtocol for Schnorr {
     type Statement = Schnorr;
     type Witness = Scalar;
-    type State = Scalar;
 
+    type State = Scalar;
     type A = RistrettoPoint;
     type C = Scalar;
     type Z = Scalar;
 
-    fn a<R: CryptoRngCore>(
+    type ProverContext = ();
+
+    fn first<R: CryptoRngCore>(
         _statement: &Schnorr,
         _witness: &Scalar,
         prover_rng: &mut R,
+        _: &(),
     ) -> (Self::State, Self::A) {
         let state = Scalar::random(prover_rng);
         let message = &state * &RISTRETTO_BASEPOINT_TABLE;
         (state, message)
     }
 
-    fn challenge<R: CryptoRngCore>(verifier_rng: &mut R) -> Self::C {
+    fn second<R: CryptoRngCore>(verifier_rng: &mut R) -> Self::C {
         Scalar::random(verifier_rng)
     }
 
-    fn z<R: CryptoRngCore>(
+    fn third<R: CryptoRngCore>(
         _statement: &Schnorr,
         _state: &Scalar,
         witness: &Scalar,
         challenge: &Scalar,
         prover_rng: &mut R,
+        _: &(),
     ) -> Self::Z {
         // TODO: Allow use with state (remove re-computation)
         challenge * witness + Scalar::random(prover_rng)
@@ -305,17 +229,22 @@ mod tests {
         let prover = SchnorrProver::new(&provers_witness);
         let verifier = SchnorrVerifier::new();
 
-        let (state, commitment) =
-            Schnorr::a(&protocol, &provers_witness, &mut prover.get_rng());
+        let (state, commitment) = Schnorr::first(
+            &protocol,
+            &provers_witness,
+            &mut prover.get_rng(),
+            &(),
+        );
 
-        let challenge = Schnorr::challenge(&mut verifier.get_rng());
+        let challenge = Schnorr::second(&mut verifier.get_rng());
 
-        let proof = Schnorr::z(
+        let proof = Schnorr::third(
             &protocol,
             &state,
             &provers_witness,
             &challenge,
             &mut prover.get_rng(),
+            &(),
         );
 
         let result =
@@ -334,17 +263,22 @@ mod tests {
         let prover = SchnorrProver::new(&provers_witness);
         let verifier = SchnorrVerifier::new();
 
-        let (state, commitment) =
-            Schnorr::a(&protocol, &provers_witness, &mut prover.get_rng());
+        let (state, commitment) = Schnorr::first(
+            &protocol,
+            &provers_witness,
+            &mut prover.get_rng(),
+            &(),
+        );
 
-        let challenge = Schnorr::challenge(&mut verifier.get_rng());
+        let challenge = Schnorr::second(&mut verifier.get_rng());
 
-        let proof = Schnorr::z(
+        let proof = Schnorr::third(
             &protocol,
             &state,
             &provers_witness,
             &challenge,
             &mut prover.get_rng(),
+            &(),
         );
 
         let result =

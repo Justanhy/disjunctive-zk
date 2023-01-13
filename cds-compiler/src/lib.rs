@@ -18,7 +18,7 @@ use schnorr::{
 use shamir_ss::{
     vsss_rs::curve25519::WrappedScalar, Shamir, Share, WithShares,
 };
-use std::any::Any;
+use std::{any::Any, fmt};
 
 type SW = Vec<Scalar>;
 type SA = Result<Vec<RistrettoPoint>, SchnorrError>;
@@ -39,6 +39,17 @@ pub struct CDS94 {
     protocols: Vec<Sigma>,
     provers: Vec<SchnorrProver>,
     verifiers: Vec<SchnorrVerifier>,
+}
+
+impl fmt::Display for CDS94 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let n = self.n;
+        let t = self.threshold;
+        write!(f, "Clauses: {}, Active Clauses: {}, Threshold: {}",
+        n,
+        n - t + 1,
+        t)
+    }
 }
 
 impl SigmaProtocol for CDS94 {
@@ -118,9 +129,6 @@ impl SigmaProtocol for CDS94 {
 
         let res = shamir.combine_shares(&shares);
         let combined_secret = res.unwrap_or(WrappedScalar::default());
-
-        dbg!(&combined_secret.0);
-        dbg!(*secret);
 
         combined_secret.0 == *secret
     }

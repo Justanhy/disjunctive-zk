@@ -1,11 +1,12 @@
 {
-	"folders": [
-		{
-			"path": "."
-		}
-	],
-	"settings": {
-		"editor.fontFamily": "Fira Code, Consolas, 'Courier New', monospace",
-		"window.zoomLevel": -0.75
-	}
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "editor.fontFamily": "Fira Code, Consolas, 'Courier New', monospace",
+    "window.zoomLevel": 0,
+    "sshfs.configs": []
+  }
 }

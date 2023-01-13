@@ -1,10 +1,9 @@
-extern crate blsttc;
-extern crate curve25519_dalek_ml as curve25519_dalek;
+pub extern crate curve25519_dalek_ml as curve25519_dalek;
 extern crate itertools;
 extern crate rand_chacha;
 extern crate rand_core;
-extern crate schnorr;
-extern crate shamir_ss;
+pub extern crate schnorr;
+pub extern crate shamir_ss;
 
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
@@ -19,7 +18,7 @@ use schnorr::{
 use shamir_ss::{
     vsss_rs::curve25519::WrappedScalar, Shamir, Share, WithShares,
 };
-use std::any::Any;
+use std::{any::Any, fmt};
 
 type SW = Vec<Scalar>;
 type SA = Result<Vec<RistrettoPoint>, SchnorrError>;
@@ -32,6 +31,7 @@ type SZ = Result<Vec<Scalar>, SchnorrError>;
 // type Sigma = SP<dyn Any, dyn Any, dyn Any, dyn Any>;
 type Sigma = Box<Schnorr>;
 
+#[derive(Clone, Debug)]
 pub struct CDS94 {
     pub threshold: usize,
     pub n: usize,
@@ -41,50 +41,16 @@ pub struct CDS94 {
     verifiers: Vec<SchnorrVerifier>,
 }
 
-// impl SigmaTranscript<SA, SC, SZ> for CDS94Transcript {
-//     fn get_commitment(&self) -> SA {
-//         match self.commitment {
-//             Some(ref c) => Ok(c.clone()),
-//             None => Err(Error::UninitializedCommitment),
-//         }
-//     }
-
-//     fn get_challenge(&self) -> SC {
-//         match self.challenge {
-//             Some(c) => Ok(c),
-//             None => Err(Error::UninitializedChallenge),
-//         }
-//     }
-
-//     fn get_proof(&self) -> SZ {
-//         match self.proof {
-//             Some(ref p) => Ok(p.clone()),
-//             None => Err(Error::UninitializedProof),
-//         }
-//     }
-// }
-
-// impl CDS94Transcript {
-//     fn new() -> Self {
-//         Self {
-//             commitment: None,
-//             challenge: None,
-//             proof: None,
-//         }
-//     }
-
-//     fn is_commited(&self) -> bool {
-//         self.commitment != None && self.challenge == None && self.proof == None
-//     }
-
-//     fn is_challenged(&self) -> bool {
-//         self.commitment != None && self.challenge != None && self.proof == None
-//     }
-
-//     fn is_proven(&self) -> bool {
-//         self.commitment != None && self.challenge != None && self.proof != None
-//     }
-// }
+impl fmt::Display for CDS94 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let n = self.n;
+        let t = self.threshold;
+        write!(f, "Clauses: {}, Active Clauses: {}, Threshold: {}",
+        n,
+        n - t + 1,
+        t)
+    }
+}
 
 impl SigmaProtocol for CDS94 {
     type Statement = CDS94;
@@ -163,9 +129,6 @@ impl SigmaProtocol for CDS94 {
 
         let res = shamir.combine_shares(&shares);
         let combined_secret = res.unwrap_or(WrappedScalar::default());
-
-        dbg!(&combined_secret.0);
-        dbg!(*secret);
 
         combined_secret.0 == *secret
     }
@@ -357,13 +320,13 @@ impl CDS94 {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct CDS94Prover {
     /// Needs to have index of active clauses
     /// Needs to have list of witnesses for each active clause
     active_clauses: Vec<bool>,
     witnesses: Vec<Scalar>,
     prover_rng: ChaCha20Rng,
-    transcripts: Vec<SchnorrTranscript>,
 }
 
 impl SigmaProver<SW, SA, SC, SZ, ChaCha20Rng> for CDS94Prover {
@@ -386,7 +349,6 @@ impl CDS94Prover {
             witnesses: witnesses.to_owned(),
             active_clauses: active_clauses.to_owned(),
             prover_rng: ChaCha20Rng::from_entropy(),
-            transcripts: Vec::with_capacity(n),
         }
     }
 
@@ -395,6 +357,8 @@ impl CDS94Prover {
     }
 }
 
+
+#[derive(Clone, Debug)]
 pub struct CDS94Verifier {
     verifier_rng: ChaCha20Rng,
 }
@@ -417,23 +381,24 @@ impl CDS94Verifier {
     }
 }
 
+pub type CDS94Test = (
+    CDS94,
+    CDS94Prover,
+    CDS94Verifier,
+    Vec<Box<Schnorr>>,
+    Vec<SchnorrProver>,
+    Vec<SchnorrVerifier>,
+    Vec<Scalar>,
+    Vec<Scalar>,
+    Vec<bool>,
+);
+
 #[cfg(test)]
-mod tests {
+pub mod tests {
 
     use super::*;
     use schnorr::{Schnorr, SchnorrProver};
 
-    type CDS94Test = (
-        CDS94,
-        CDS94Prover,
-        CDS94Verifier,
-        Vec<Box<Schnorr>>,
-        Vec<SchnorrProver>,
-        Vec<SchnorrVerifier>,
-        Vec<Scalar>,
-        Vec<Scalar>,
-        Vec<bool>,
-    );
 
     fn test_init<const N: usize, const D: usize>() -> CDS94Test {
         // INIT //
@@ -507,7 +472,7 @@ mod tests {
             active_clauses,
         ) = test_init::<N, D>();
 
-        dbg!(&active_clauses);
+        // dbg!(&active_clauses);
 
         let commitments = protocol.first_message(&active_clauses);
         assert!(commitments.len() == N);
@@ -517,24 +482,24 @@ mod tests {
             &mut protocol.provers[0].get_rng(),
         );
         assert!(testc == commitments[0]);
-        dbg!(
-            commitments[0],
-            protocol.transcripts[0]
-                .commitment
-                .unwrap()
-        );
+        // dbg!(
+        //     commitments[0],
+        //     protocol.transcripts[0]
+        //         .commitment
+        //         .unwrap()
+        // );
         assert!(
             commitments[0]
                 == protocol.transcripts[0]
                     .commitment
                     .unwrap()
         );
-        dbg!(
-            commitments[1],
-            protocol.transcripts[1]
-                .commitment
-                .unwrap()
-        );
+        // dbg!(
+        //     commitments[1],
+        //     protocol.transcripts[1]
+        //         .commitment
+        //         .unwrap()
+        // );
         assert!(
             commitments[1]
                 == protocol.transcripts[1]

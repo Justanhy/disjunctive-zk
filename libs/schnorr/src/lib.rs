@@ -1,3 +1,5 @@
+//! Defines traits related to Sigma Protocols and includes an implementation of
+//! Schnorr's identification scheme implementing defined traits.
 extern crate curve25519_dalek_ml as curve25519_dalek;
 extern crate rand;
 extern crate rand_chacha;
@@ -17,8 +19,8 @@ use rand_core::{CryptoRngCore, SeedableRng};
 
 /// Trait for the transcripts in Sigma protocols
 /// A is the first message (the commitment of the Prover)
-/// C is the challenge (sent by the Verifier)
-/// Z is the proof (sent by the Prover which the Verifier uses to validate the prover)
+/// C is the second message (sent by the Verifier)
+/// Z is the third message (sent by the Prover which the Verifier uses to validate the prover)
 /// These are generic types that the Sigma protocol concrete implementation will define
 pub trait SigmaTranscript {
     type A; // Commitment (First round message)

@@ -2,5 +2,6 @@
 
 members = [
   "cds-compiler",
+  "stacksig-compiler",
   "libs/*"
 ]

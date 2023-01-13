@@ -321,8 +321,7 @@ pub struct CDS94Prover {
     prover_rng: ChaCha20Rng,
 }
 
-impl SigmaProver<SW, SA, SC, SZ, ChaCha20Rng> for CDS94Prover {
-    // type Transcript = CDS94Transcript;
+impl SigmaProver<ChaCha20Rng> for CDS94Prover {
     type Protocol = CDS94;
 
     fn get_rng(&self) -> ChaCha20Rng {
@@ -355,8 +354,7 @@ pub struct CDS94Verifier {
     verifier_rng: ChaCha20Rng,
 }
 
-impl SigmaVerifier<SW, SA, SC, SZ, ChaCha20Rng> for CDS94Verifier {
-    // type Transcript = CDS94Transcript;
+impl SigmaVerifier<ChaCha20Rng> for CDS94Verifier {
     type Protocol = CDS94;
 
     fn get_rng(&self) -> ChaCha20Rng {

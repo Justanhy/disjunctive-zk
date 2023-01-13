@@ -98,22 +98,20 @@ pub trait SigmaTranscript {
 }
 
 /// Trait for provers in Sigma protocols
-pub trait SigmaProver<W, A, C, Z, R>
+pub trait SigmaProver<R>
 where
     R: CryptoRngCore,
 {
-    // type Transcript: SigmaTranscript;
     type Protocol: SigmaProtocol;
 
     fn get_rng(&self) -> R;
 }
 
 /// Trait for verifiers in Sigma protocols
-pub trait SigmaVerifier<W, A, C, Z, R>
+pub trait SigmaVerifier<R>
 where
     R: CryptoRngCore,
 {
-    // type Transcript: SigmaTranscript;
     type Protocol: SigmaProtocol;
 
     fn get_rng(&self) -> R;

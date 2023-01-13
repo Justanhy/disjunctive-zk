@@ -25,16 +25,6 @@ pub struct SchnorrTranscript {
     pub proof: Option<Scalar>,
 }
 
-/// Type aliases for Schnorr protocol
-/// SW is the witness
-type SW = Scalar;
-/// SA is the commitment
-type SA = Result<RistrettoPoint, Error>;
-/// SC is the challenge
-type SC = Result<Scalar, Error>;
-/// SZ is the proof
-type SZ = Result<Scalar, Error>;
-
 /// Implementation of SigmaTranscript for SchnorrTranscript
 impl SigmaTranscript for SchnorrTranscript {
     type A = RistrettoPoint;
@@ -99,8 +89,7 @@ impl SchnorrProver {
     }
 }
 
-impl SigmaProver<SW, SA, SC, SZ, ChaCha20Rng> for SchnorrProver {
-    // type Transcript = SchnorrTranscript;
+impl SigmaProver<ChaCha20Rng> for SchnorrProver {
     type Protocol = Schnorr;
 
     fn get_rng(&self) -> ChaCha20Rng {
@@ -124,8 +113,7 @@ impl SchnorrVerifier {
     }
 }
 
-impl SigmaVerifier<SW, SA, SC, SZ, ChaCha20Rng> for SchnorrVerifier {
-    // type Transcript = SchnorrTranscript;
+impl SigmaVerifier<ChaCha20Rng> for SchnorrVerifier {
     type Protocol = Schnorr;
 
     fn get_rng(&self) -> ChaCha20Rng {
@@ -196,9 +184,10 @@ impl SigmaProtocol for Schnorr {
 }
 
 impl Schnorr {
-    pub fn init(witness: SW) -> Self {
-        let pub_key = RISTRETTO_BASEPOINT_POINT * witness;
-        Schnorr { pub_key }
+    pub fn init(witness: Scalar) -> Self {
+        Schnorr {
+            pub_key: RISTRETTO_BASEPOINT_POINT * witness,
+        }
     }
 
     pub fn simulator(self) -> SchnorrTranscript {

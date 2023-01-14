@@ -12,7 +12,6 @@ use curve25519_dalek::constants::{
 };
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
-use error::Error;
 use rand_chacha::ChaCha20Rng;
 use rand_core::{CryptoRngCore, SeedableRng};
 use sigma::{SigmaProtocol, SigmaProver, SigmaTranscript, SigmaVerifier};
@@ -30,19 +29,17 @@ impl SigmaTranscript for SchnorrTranscript {
     type A = RistrettoPoint;
     type C = Scalar;
     type Z = Scalar;
-    fn get_commitment(&self) -> Result<Self::A, Error> {
+
+    fn get_commitment(&self) -> Option<Self::A> {
         self.commitment
-            .ok_or(Error::UninitializedCommitment)
     }
 
-    fn get_challenge(&self) -> Result<Self::C, Error> {
+    fn get_challenge(&self) -> Option<Self::C> {
         self.challenge
-            .ok_or(Error::UninitializedChallenge)
     }
 
-    fn get_proof(&self) -> Result<Self::Z, Error> {
+    fn get_proof(&self) -> Option<Self::Z> {
         self.proof
-            .ok_or(Error::UninitializedProof)
     }
 }
 
@@ -53,22 +50,6 @@ impl SchnorrTranscript {
             challenge: None,
             proof: None,
         }
-    }
-
-    pub fn is_new(&self) -> bool {
-        self.commitment == None && self.challenge == None && self.proof == None
-    }
-
-    pub fn is_commited(&self) -> bool {
-        self.commitment != None
-    }
-
-    pub fn is_challenged(&self) -> bool {
-        self.commitment != None && self.challenge != None
-    }
-
-    pub fn is_proven(&self) -> bool {
-        self.commitment != None && self.challenge != None && self.proof != None
     }
 }
 

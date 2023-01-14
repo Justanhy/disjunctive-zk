@@ -12,13 +12,14 @@ use itertools::{izip, Itertools};
 use rand_chacha::ChaCha20Rng;
 use rand_core::{CryptoRngCore, SeedableRng};
 use schnorr::{
-    error::{Error as SchnorrError} , Schnorr, SchnorrProver, SchnorrTranscript,
-    SchnorrVerifier, sigma::{SigmaProtocol, SigmaProver, SigmaVerifier, SigmaTranscript}
+    error::Error as SchnorrError,
+    sigma::{SigmaProtocol, SigmaProver, SigmaTranscript, SigmaVerifier},
+    Schnorr, SchnorrProver, SchnorrTranscript, SchnorrVerifier,
 };
 use shamir_ss::{
     vsss_rs::curve25519::WrappedScalar, Shamir, Share, WithShares,
 };
-use std::{fmt, any::Any};
+use std::{any::Any, fmt};
 
 type SW = Vec<Scalar>;
 type SA = Result<Vec<RistrettoPoint>, SchnorrError>;
@@ -26,11 +27,11 @@ type SC = Result<Scalar, SchnorrError>;
 type SZ = Result<Vec<Scalar>, SchnorrError>;
 // TODO: Implement generic sigma type
 // type Sigma = Box<dyn SigmaProtocol<
-//     Statement = dyn Any, 
-//     Witness = dyn Any, 
-//     State = dyn Any, 
-//     A = dyn Any, 
-//     C = dyn Any, 
+//     Statement = dyn Any,
+//     Witness = dyn Any,
+//     State = dyn Any,
+//     A = dyn Any,
+//     C = dyn Any,
 //     Z = dyn Any,
 //     ProverContext =  dyn Any
 // >>;
@@ -49,17 +50,24 @@ impl fmt::Display for CDS94 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let n = self.n;
         let t = self.threshold;
-        write!(f, "Clauses: {}, Active Clauses: {}, Threshold: {}",
-        n,
-        n - t + 1,
-        t)
+        write!(
+            f,
+            "Clauses: {}, Active Clauses: {}, Threshold: {}",
+            n,
+            n - t + 1,
+            t
+        )
     }
 }
+
+type SigTrans =
+    Box<dyn SigmaTranscript<A = RistrettoPoint, C = Scalar, Z = Scalar>>;
 
 impl SigmaProtocol for CDS94 {
     type Statement = CDS94;
     type Witness = Vec<Scalar>;
-    type State = Vec<Box<SchnorrTranscript>>; // dyn SigmaTranscript<A = RistrettoPoint, C = Scalar, Z = Scalar>
+    // type State = Vec<Box<SchnorrTranscript>>; // dyn SigmaTranscript<A = RistrettoPoint, C = Scalar, Z = Scalar>
+    type State = Vec<SigTrans>;
 
     type A = Vec<RistrettoPoint>;
     type C = Scalar;
@@ -79,19 +87,20 @@ impl SigmaProtocol for CDS94 {
         statement: &CDS94,
         _witness: &Self::Witness,
         _prover_rng: &mut R,
-        active_clauses: &Vec<bool>
+        active_clauses: &Vec<bool>,
     ) -> (Self::State, Self::A) {
         assert!(active_clauses.len() == statement.n);
-        
 
-        let transcripts: Self::State = active_clauses.iter().enumerate().map(
-            |(i, &is_active)| {
-                if is_active {
+        let transcripts: Self::State = active_clauses
+            .iter()
+            .enumerate()
+            .map(|(i, &is_active)| {
+                let ret: SigTrans = if is_active {
                     let (_state, commitment) = Schnorr::first(
                         &statement.protocols[i],
                         &Scalar::default(),
                         &mut statement.provers[i].get_rng(),
-                        &()
+                        &(),
                     );
                     Box::new(SchnorrTranscript {
                         commitment: Some(commitment),
@@ -100,18 +109,19 @@ impl SigmaProtocol for CDS94 {
                     })
                 } else {
                     Box::new(statement.protocols[i].simulator())
-                }
-        }
-    ).collect();
+                };
+                ret
+            })
+            .collect();
         // let mut _error: Option<Error> = None; // For error propagation
 
         let commitment: Self::A = transcripts
-        .iter()
-        .map(|t| {
-            t.commitment
-                .expect("Commitment should be present")
-        })
-        .collect();
+            .iter()
+            .map(|t| {
+                t.get_commitment()
+                    .expect("Commitment should be present")
+            })
+            .collect();
         (transcripts, commitment)
     }
 
@@ -121,70 +131,127 @@ impl SigmaProtocol for CDS94 {
 
     fn third<R: CryptoRngCore>(
         statement: &Self::Statement,
-        state: &Vec<Box<SchnorrTranscript>>,
+        state: &Self::State,
         witness: &Self::Witness,
         challenge: &Self::C,
         prover_rng: &mut R,
-        active_clauses: &Vec<bool>
+        active_clauses: &Vec<bool>,
     ) -> Self::Z {
-        let shares = CDS94::fill_missing_shares(&state, *challenge, active_clauses);
+        let shares =
+            CDS94::fill_missing_shares(&state, *challenge, active_clauses);
 
-        let mut transcripts: Vec<Box<SchnorrTranscript>> = state.clone();
-        
-        for share in shares.iter() {
-            let i = share.identifier() as usize - 1;
+        let mut transcripts: Vec<SigTrans> = shares
+            .iter()
+            .map(|share| {
+                let i = share.identifier() as usize - 1;
 
-            match state[i].challenge {
-                Some(_) => continue, // Consider: doing extra work to mitigate timing attacks
-                None => {
-                    let mut c = [0u8; 32];
-                    c.copy_from_slice(share.value());
-                    
-                    transcripts[i] = Box::new(SchnorrTranscript {
-                        commitment: state[i].commitment, 
-                        challenge: Some(Scalar::from_bytes_mod_order(c)),
-                        proof: None,
-                    })
+                match state[i].get_challenge() {
+                    Some(s) => Box::new(SchnorrTranscript {
+                        commitment: state[i].get_commitment(),
+                        challenge: state[i].get_challenge(),
+                        proof: state[i].get_proof(),
+                    }) as SigTrans,
+                    None => {
+                        let mut c = [0u8; 32];
+                        c.copy_from_slice(share.value());
+
+                        Box::new(SchnorrTranscript {
+                            commitment: state[i].get_commitment(),
+                            challenge: Some(Scalar::from_bytes_mod_order(c)),
+                            proof: None,
+                        }) as SigTrans
+                    }
                 }
-            }
-        }
+            })
+            .collect();
 
-        let transcripts: Vec<Box<SchnorrTranscript>> = transcripts.iter().enumerate().map(|(i, transcript)| {
+        // for share in shares.iter() {
+        //     let i = share.identifier() as usize - 1;
+
+        //     match state[i].get_challenge() {
+        //         Some(_) => continue, // Consider: doing extra work to mitigate timing attacks
+        //         None => {
+        //             let mut c = [0u8; 32];
+        //             c.copy_from_slice(share.value());
+
+        //             transcripts.inser = Box::new(SchnorrTranscript {
+        //                 commitment: state[i].get_commitment(),
+        //                 challenge: Some(Scalar::from_bytes_mod_order(c)),
+        //                 proof: None,
+        //             })
+        //         }
+        //     }
+        // }
+
+        for (i, transcript) in transcripts
+            .iter_mut()
+            .enumerate()
+        {
             if !transcript.is_challenged() {
                 panic!("Transcript should have a challenge and commitment");
-            } 
+            }
             if transcript.is_proven() {
                 if active_clauses[i] {
                     panic!("Transcript should not be proven yet as it is an active clause");
                 }
-                transcript.clone()
+                continue;
             } else {
                 let proof = Schnorr::third(
                     &statement.protocols[i],
                     &Scalar::default(),
                     &witness[i],
                     &transcript
-                        .challenge
+                        .get_challenge()
                         .expect("Challenge should be present"),
-                        &mut statement.provers[i].get_rng(),
-                        &()
+                    &mut statement.provers[i].get_rng(),
+                    &(),
                 );
-                Box::new(SchnorrTranscript {
-                    commitment: transcript.commitment,
-                    challenge: transcript.challenge,
+                *transcript = Box::new(SchnorrTranscript {
+                    commitment: transcript.get_commitment(),
+                    challenge: transcript.get_challenge(),
                     proof: Some(proof),
-                })
+                }) as SigTrans;
             }
-        }).collect();
+        }
+
+        // let transcripts: Vec<SigTrans> = transcripts.iter().enumerate().map(|(i, transcript)| {
+        //     if !transcript.is_challenged() {
+        //         panic!("Transcript should have a challenge and commitment");
+        //     }
+        //     if transcript.is_proven() {
+        //         if active_clauses[i] {
+        //             panic!("Transcript should not be proven yet as it is an active clause");
+        //         }
+        //         transcript.clone()
+        //     } else {
+        //         let proof = Schnorr::third(
+        //             &statement.protocols[i],
+        //             &Scalar::default(),
+        //             &witness[i],
+        //             &transcript
+        //                 .get_challenge()
+        //                 .expect("Challenge should be present"),
+        //                 &mut statement.provers[i].get_rng(),
+        //                 &()
+        //         );
+        //         let res: SigTrans = Box::new(SchnorrTranscript {
+        //             commitment: transcript.get_commitment(),
+        //             challenge: transcript.get_challenge(),
+        //             proof: Some(proof),
+        //         });
+
+        //         &res
+        //     }
+        // }).collect();
 
         // Return vector of challenges and vector of proofs or a vector of tuples of them
         transcripts
             .iter()
             .map(|t| {
                 (
-                    t.challenge
+                    t.get_challenge()
                         .expect("Challenge should be present"),
-                    t.proof
+                    t.get_proof()
                         .expect("Proof should be present"),
                 )
             })
@@ -235,7 +302,7 @@ impl SigmaProtocol for CDS94 {
 
 impl CDS94 {
     fn fill_missing_shares(
-        transcripts: &Vec<Box<SchnorrTranscript>>,
+        transcripts: &Vec<SigTrans>,
         challenge: Scalar,
         active_clauses: &Vec<bool>,
     ) -> Vec<Share> {
@@ -268,7 +335,7 @@ impl CDS94 {
                 let mut s = [0u8; 33];
                 s[0] = (i + 1) as u8;
                 s[1..].copy_from_slice(
-                    t.challenge
+                    t.get_challenge()
                         .expect("Challenge should be present")
                         .as_bytes(),
                 );
@@ -285,6 +352,7 @@ impl CDS94 {
             .unwrap();
 
         shares.append(&mut missing_shares);
+        shares.sort_by_key(|k| k.identifier());
 
         // Check shares can combine to the challenge
         let combineshares = shamir.combine_shares::<WrappedScalar>(&shares);
@@ -348,7 +416,6 @@ impl CDS94Prover {
     }
 }
 
-
 #[derive(Clone, Debug)]
 pub struct CDS94Verifier {
     verifier_rng: ChaCha20Rng,
@@ -389,17 +456,21 @@ pub mod tests {
     use super::*;
     use schnorr::{Schnorr, SchnorrProver};
 
-
     fn test_init<const N: usize, const D: usize>() -> CDS94Test {
         // INIT //
         assert!(D <= N);
         // closure to generate random witnesses
         let m = |_| Scalar::random(&mut ChaCha20Rng::from_entropy());
         // generate witnesses
-        let actual_witnesses: Vec<Scalar> = (0..N).map(m).collect();
+        let actual_witnesses: Vec<Scalar> = (0..N)
+            .map(m)
+            .collect();
         // generate the prover's witnesses - for inactive clauses the prover generates a random witness
         let provers_witnesses: Vec<Scalar> = actual_witnesses
-            .to_owned().iter().enumerate().map(|(i, s)| {
+            .to_owned()
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
                 if i < D {
                     s.clone()
                 } else {
@@ -407,25 +478,27 @@ pub mod tests {
                 }
             })
             .collect();
-            // vector of booleans indicating which clauses are active
+        // vector of booleans indicating which clauses are active
         let active_clauses: Vec<bool> = (0..N)
             .map(|i| i < D)
             .collect();
-            // generate the statement (aka protocol) for each clause
+        // generate the statement (aka protocol) for each clause
         let protocols = actual_witnesses
-            .to_owned().iter()
+            .to_owned()
+            .iter()
             .map(|w| Box::new(Schnorr::init(*w)))
             .collect_vec();
-            // generate the prover for each clause
+        // generate the prover for each clause
         let provers = provers_witnesses
-            .to_owned().iter()
+            .to_owned()
+            .iter()
             .map(|w| SchnorrProver::new(&w))
             .collect_vec();
         // generate the verifier for each clause
         let verifiers = (0..N)
             .map(|_| SchnorrVerifier::new())
             .collect_vec();
-        
+
         let protocol = CDS94::init(D, N, &protocols, &provers, &verifiers);
         let prover: CDS94Prover =
             CDS94Prover::new(N, &provers_witnesses, &active_clauses);
@@ -445,7 +518,6 @@ pub mod tests {
         )
     }
 
-
     #[test]
     fn first_message_works() {
         const N: usize = 2;
@@ -462,25 +534,30 @@ pub mod tests {
             active_clauses,
         ) = test_init::<N, D>();
 
-        let (transcripts, commitments) = CDS94::first(&protocol,  &provers_witnesses, &mut cdsprover.get_rng(), &active_clauses);
+        let (transcripts, commitments) = CDS94::first(
+            &protocol,
+            &provers_witnesses,
+            &mut cdsprover.get_rng(),
+            &active_clauses,
+        );
         assert!(commitments.len() == N);
         let (_, testc) = Schnorr::first(
             &protocol.protocols[0],
             &actual_witnesses[0],
             &mut protocol.provers[0].get_rng(),
-            &()
+            &(),
         );
         assert!(testc == commitments[0]);
         assert!(
             commitments[0]
                 == transcripts[0]
-                    .commitment
+                    .get_commitment()
                     .unwrap()
         );
         assert!(
             commitments[1]
                 == transcripts[1]
-                    .commitment
+                    .get_commitment()
                     .unwrap()
         );
     }
@@ -502,22 +579,22 @@ pub mod tests {
         ) = test_init::<N, D>();
 
         let (transcripts, commitments) = CDS94::first(
-            &protocol,  
-            &provers_witnesses, 
-            &mut cdsprover.get_rng(), 
-            &active_clauses
+            &protocol,
+            &provers_witnesses,
+            &mut cdsprover.get_rng(),
+            &active_clauses,
         );
         let challenge = CDS94::second(&mut cdsverifier.get_rng());
         // Third message
         let proof = CDS94::third(
-            &protocol, 
-            &transcripts, 
-            cdsprover.borrow_witnesses(), 
-            &challenge, 
-            &mut cdsprover.get_rng(), 
-            &active_clauses
+            &protocol,
+            &transcripts,
+            cdsprover.borrow_witnesses(),
+            &challenge,
+            &mut cdsprover.get_rng(),
+            &active_clauses,
         );
-        
+
         assert!(CDS94::verify(&protocol, &commitments, &challenge, &proof));
     }
 
@@ -541,15 +618,22 @@ pub mod tests {
 
         // First message
         let (transcripts, commitments) = CDS94::first(
-            &protocol,  
-            &provers_witnesses, 
-            &mut cdsprover.get_rng(), 
-            &active_clauses
+            &protocol,
+            &provers_witnesses,
+            &mut cdsprover.get_rng(),
+            &active_clauses,
         );
         // Second message
         let challenge = CDS94::second(&mut cdsverifier.get_rng());
         // Third message
-        let proof = CDS94::third(&protocol, &transcripts, cdsprover.borrow_witnesses(), &challenge, &mut cdsprover.get_rng(), &active_clauses);
+        let proof = CDS94::third(
+            &protocol,
+            &transcripts,
+            cdsprover.borrow_witnesses(),
+            &challenge,
+            &mut cdsprover.get_rng(),
+            &active_clauses,
+        );
         assert!(CDS94::verify(&protocol, &commitments, &challenge, &proof));
     }
 }

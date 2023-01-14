@@ -90,11 +90,41 @@ pub trait SigmaTranscript {
     /// Proof (Third round message)
     type Z;
 
-    fn get_commitment(&self) -> Result<Self::A, Error>;
+    fn get_commitment(&self) -> Option<Self::A>;
 
-    fn get_challenge(&self) -> Result<Self::C, Error>;
+    fn get_challenge(&self) -> Option<Self::C>;
 
-    fn get_proof(&self) -> Result<Self::Z, Error>;
+    fn get_proof(&self) -> Option<Self::Z>;
+
+    fn is_new(&self) -> bool {
+        self.get_commitment()
+            .is_none()
+            && self
+                .get_challenge()
+                .is_none()
+            && self
+                .get_proof()
+                .is_none()
+    }
+
+    fn is_commited(&self) -> bool {
+        self.get_commitment()
+            .is_some()
+    }
+
+    fn is_challenged(&self) -> bool {
+        self.is_commited()
+            && self
+                .get_challenge()
+                .is_some()
+    }
+
+    fn is_proven(&self) -> bool {
+        self.is_challenged()
+            && self
+                .get_proof()
+                .is_some()
+    }
 }
 
 /// Trait for provers in Sigma protocols

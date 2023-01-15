@@ -1,5 +1,4 @@
-//! This module defines shared traits for Sigma protocols
-
+//! This module defines traits related to Sigma protocols
 use crate::*;
 
 /// Trait for Sigma protocols
@@ -11,8 +10,6 @@ pub trait SigmaProtocol {
     /// Private key of the protocol
     type Witness;
 
-    /// The state that generates the commitment
-    type State;
     /// First round message
     type A;
     /// Challenge (Second round message)
@@ -20,14 +17,20 @@ pub trait SigmaProtocol {
     /// Third round message
     type Z;
 
-    /// Information that is provided by the prover for the protocol.
+    /// On every protocol execution (i.e. interaction between the prover and the verifier)
+    /// there is a particular *state* for that execution. This *state* contains contextual information for the
+    /// protocol that may be used (usually by the prover in the third round).
+    type State;
+    /// Contextual information that is private to the prover but required by the protocol.
     type ProverContext;
 
-    fn simulate(
-        statement: &Self::Statement,
-        challenge: &Self::C,
-        z: &Self::Z,
-    ) -> Self::A;
+    // fn simulate(
+    //     statement: &Self::Statement,
+    //     challenge: &Self::C,
+    //     z: &Self::Z,
+    // ) -> Self::A
+    // where
+    //     Self: Sized;
 
     /// The first message in a Sigma protocol (sent by the Prover).
     fn first<R: CryptoRngCore>(
@@ -35,12 +38,16 @@ pub trait SigmaProtocol {
         witness: &Self::Witness,
         prover_rng: &mut R,
         prover_context: &Self::ProverContext,
-    ) -> (Self::State, Self::A);
+    ) -> (Self::State, Self::A)
+    where
+        Self: Sized;
 
     /// The second message in a Sigma protocol (sent by the Verifier).
     ///
     /// Usually, this is a challenge sent by the Verifier to the Prover.
-    fn second<R: CryptoRngCore>(verifier_rng: &mut R) -> Self::C;
+    fn second<R: CryptoRngCore>(verifier_rng: &mut R) -> Self::C
+    where
+        Self: Sized;
 
     /// The third message in a Sigma protocol (sent by the Prover).
     fn third<R: CryptoRngCore>(
@@ -50,7 +57,9 @@ pub trait SigmaProtocol {
         challenge: &Self::C,
         prover_rng: &mut R,
         prover_context: &Self::ProverContext,
-    ) -> Self::Z;
+    ) -> Self::Z
+    where
+        Self: Sized;
 
     /// The verification method used by the Verifier
     ///
@@ -71,7 +80,9 @@ pub trait SigmaProtocol {
         a: &Self::A,
         c: &Self::C,
         z: &Self::Z,
-    ) -> bool;
+    ) -> bool
+    where
+        Self: Sized;
 }
 
 /// Trait for the transcripts in Sigma protocols

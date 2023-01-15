@@ -14,7 +14,9 @@ pub trait Message {
 
 impl Message for [u8] {
     fn write<W: Write>(&self, writer: &mut W) {
-        writer.write_all(self).unwrap();
+        writer
+            .write_all(self)
+            .unwrap();
     }
 }
 

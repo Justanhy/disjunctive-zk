@@ -20,9 +20,12 @@ pub struct CompiledMessageZ<Z: Message> {
 
 impl<M: Message> Message for CompiledMessageZ<M> {
     fn write<W: Write>(&self, writer: &mut W) {
-        self.z.write(writer);
-        self.ck.write(writer);
-        self.rd.write(writer);
+        self.z
+            .write(writer);
+        self.ck
+            .write(writer);
+        self.rd
+            .write(writer);
     }
 }
 
@@ -114,8 +117,12 @@ impl<S: Stackable> Stackable for Compiled<S> {
         let (ck, td) = CommitKey::gen(rng, witness.side);
         let rd = Randomness::random(rng);
         let comm = match witness.side {
-            Side::Left => ck.commit::<S::MessageA, S::MessageA>(&rd, (Some(&a), None)),
-            Side::Right => ck.commit::<S::MessageA, S::MessageA>(&rd, (None, Some(&a))),
+            Side::Left => {
+                ck.commit::<S::MessageA, S::MessageA>(&rd, (Some(&a), None))
+            }
+            Side::Right => {
+                ck.commit::<S::MessageA, S::MessageA>(&rd, (None, Some(&a)))
+            }
         };
 
         // first message is just a commitment
@@ -132,37 +139,65 @@ impl<S: Stackable> Stackable for Compiled<S> {
         let (precomp, z, ck, rd) = match witness.side {
             Side::Left => {
                 // run the real prover on the right
-                let (precomp, z) =
-                    S::sigma_z(statement.left(), &witness.witness, &state.st, challenge);
-
-                // simulate the right side
-                let a_right = S::ehvzk(&precomp, statement.right(), challenge, &z);
-
-                // equivocate on the right side
-                let rd = state.td.equiv(
-                    &state.rd,
-                    (Some(&state.a), None),
-                    (Some(&state.a), Some(&a_right)),
+                let (precomp, z) = S::sigma_z(
+                    statement.left(),
+                    &witness.witness,
+                    &state.st,
+                    challenge,
                 );
 
-                (precomp, z, state.ck.clone(), rd)
+                // simulate the right side
+                let a_right =
+                    S::ehvzk(&precomp, statement.right(), challenge, &z);
+
+                // equivocate on the right side
+                let rd = state
+                    .td
+                    .equiv(
+                        &state.rd,
+                        (Some(&state.a), None),
+                        (Some(&state.a), Some(&a_right)),
+                    );
+
+                (
+                    precomp,
+                    z,
+                    state
+                        .ck
+                        .clone(),
+                    rd,
+                )
             }
             Side::Right => {
                 // run the real prover on the left
-                let (precomp, z) =
-                    S::sigma_z(statement.right(), &witness.witness, &state.st, challenge);
-
-                // simulate the right side
-                let a_left = S::ehvzk(&precomp, statement.left(), challenge, &z);
-
-                // equivocate on the left side
-                let rd = state.td.equiv(
-                    &state.rd,
-                    (None, Some(&state.a)),
-                    (Some(&a_left), Some(&state.a)),
+                let (precomp, z) = S::sigma_z(
+                    statement.right(),
+                    &witness.witness,
+                    &state.st,
+                    challenge,
                 );
 
-                (precomp, z, state.ck.clone(), rd)
+                // simulate the right side
+                let a_left =
+                    S::ehvzk(&precomp, statement.left(), challenge, &z);
+
+                // equivocate on the left side
+                let rd = state
+                    .td
+                    .equiv(
+                        &state.rd,
+                        (None, Some(&state.a)),
+                        (Some(&a_left), Some(&state.a)),
+                    );
+
+                (
+                    precomp,
+                    z,
+                    state
+                        .ck
+                        .clone(),
+                    rd,
+                )
             }
         };
         (precomp, CompiledMessageZ { z, ck, rd })

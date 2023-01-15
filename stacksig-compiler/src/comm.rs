@@ -1,5 +1,7 @@
 use curve25519_dalek::constants;
-use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoBasepointTable};
+use curve25519_dalek::ristretto::{
+    CompressedRistretto, RistrettoBasepointTable,
+};
 use curve25519_dalek::scalar::Scalar;
 
 use rand_core::{CryptoRng, RngCore};
@@ -17,8 +19,13 @@ use std::rc::Rc;
 
 impl Message for CommitKey {
     fn write<W: Write>(&self, writer: &mut W) {
-        let cp = self.0.basepoint().compress();
-        writer.write_all(cp.as_bytes()).unwrap();
+        let cp = self
+            .0
+            .basepoint()
+            .compress();
+        writer
+            .write_all(cp.as_bytes())
+            .unwrap();
     }
 }
 
@@ -29,7 +36,9 @@ pub struct Commitment([u8; 32]);
 
 impl Message for Commitment {
     fn write<W: Write>(&self, writer: &mut W) {
-        writer.write_all(&self.0).unwrap();
+        writer
+            .write_all(&self.0)
+            .unwrap();
     }
 }
 
@@ -46,8 +55,12 @@ fn feistel_round(l: [u8; 16], mut r: [u8; 16]) -> ([u8; 16], [u8; 16]) {
 // Feistel is indempotent
 fn feistel(v: &[u8; 32]) -> [u8; 32] {
     let (l, r) = v.split_at(16);
-    let l = l.try_into().unwrap();
-    let r = r.try_into().unwrap();
+    let l = l
+        .try_into()
+        .unwrap();
+    let r = r
+        .try_into()
+        .unwrap();
 
     let (l, r) = feistel_round(l, r);
     let (l, r) = feistel_round(l, r);
@@ -97,8 +110,18 @@ pub struct CommitKey(Rc<RistrettoBasepointTable>, Rc<RistrettoBasepointTable>);
 impl fmt::Debug for CommitKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CommitKey")
-            .field("left", &self.0.basepoint())
-            .field("right", &self.0.basepoint())
+            .field(
+                "left",
+                &self
+                    .0
+                    .basepoint(),
+            )
+            .field(
+                "right",
+                &self
+                    .0
+                    .basepoint(),
+            )
             .finish()
     }
 }
@@ -110,7 +133,8 @@ fn hash<M: Message>(v: &M) -> Scalar {
 }
 
 fn hash_option<M: Message>(v: Option<&M>) -> Scalar {
-    v.map(hash).unwrap_or(Scalar::zero())
+    v.map(hash)
+        .unwrap_or(Scalar::zero())
 }
 
 impl CommitKey {
@@ -123,15 +147,25 @@ impl CommitKey {
             match side {
                 Side::Left => {
                     let r = &td * &constants::RISTRETTO_BASEPOINT_TABLE;
-                    let li = perm_inv(r.compress().as_bytes());
-                    if let Some(l) = CompressedRistretto::from_slice(&li).decompress() {
+                    let li = perm_inv(
+                        r.compress()
+                            .as_bytes(),
+                    );
+                    if let Some(l) =
+                        CompressedRistretto::from_slice(&li).decompress()
+                    {
                         break (td, l, r);
                     }
                 }
                 Side::Right => {
                     let l = &td * &constants::RISTRETTO_BASEPOINT_TABLE;
-                    let ri = perm(l.compress().as_bytes());
-                    if let Some(r) = CompressedRistretto::from_slice(&ri).decompress() {
+                    let ri = perm(
+                        l.compress()
+                            .as_bytes(),
+                    );
+                    if let Some(r) =
+                        CompressedRistretto::from_slice(&ri).decompress()
+                    {
                         break (td, l, r);
                     }
                 }
@@ -155,12 +189,22 @@ impl CommitKey {
         let comm = random * &constants::RISTRETTO_BASEPOINT_TABLE;
 
         // add first element
-        let comm = values.0.map(|v| comm + &hash(v) * &*self.0).unwrap_or(comm);
+        let comm = values
+            .0
+            .map(|v| comm + &hash(v) * &*self.0)
+            .unwrap_or(comm);
 
         // add second element
-        let comm = values.1.map(|v| comm + &hash(v) * &*self.1).unwrap_or(comm);
+        let comm = values
+            .1
+            .map(|v| comm + &hash(v) * &*self.1)
+            .unwrap_or(comm);
 
-        Commitment(*comm.compress().as_bytes())
+        Commitment(
+            *comm
+                .compress()
+                .as_bytes(),
+        )
     }
 }
 
@@ -171,9 +215,9 @@ mod tests {
     #[test]
     fn test_perm_inv() {
         let v: [u8; 32] = [
-            0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32, 0x11, 0x42, 0x64,
-            0x32, 0x11, 0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32, 0x11,
-            0x42, 0x64, 0x32, 0x11,
+            0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32,
+            0x11, 0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32, 0x11, 0x42, 0x64,
+            0x32, 0x11, 0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32, 0x11,
         ];
         let pv = perm(&v);
         assert_eq!(v, perm_inv(&pv));

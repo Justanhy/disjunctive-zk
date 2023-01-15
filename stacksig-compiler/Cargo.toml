@@ -11,3 +11,10 @@ curve25519-dalek = "3"
 rand_core="0.5.1"
 sha2 = "0.9.3"
 digest = "0.9"
+
+[dev-dependencies]
+criterion = { version = "0.4.0", features = ["html_reports"] }
+
+[[bench]]
+name = "stacksig_benchmark"
+harness = false

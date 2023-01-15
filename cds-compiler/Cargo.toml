@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-schnorr = { path = "../libs/schnorr" }
+sigmazk = { path = "../libs/sigmazk" }
 shamir_ss = { path = "../libs/shamir_ss" }
 curve25519-dalek-ml = "4.0.0-pre.2"
 rand_chacha = "0.3"

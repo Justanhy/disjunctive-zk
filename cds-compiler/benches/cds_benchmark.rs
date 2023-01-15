@@ -1,15 +1,16 @@
+//! Benchmarking for the CDS94 compiler
 use core::fmt;
 use std::time::Duration;
 
 use cds_compiler::*;
 use criterion::{
     criterion_group, criterion_main, Bencher, BenchmarkId, Criterion,
+    Throughput,
 };
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand_chacha::ChaCha20Rng;
 use rand_core::SeedableRng;
-use schnorr::sigma::{SigmaProtocol, SigmaProver, SigmaVerifier};
-use schnorr::*;
+use sigmazk::*;
 
 fn bench_init(n: usize, d: usize) -> CDS94Test {
     // INIT //
@@ -74,7 +75,7 @@ fn bench_init(n: usize, d: usize) -> CDS94Test {
 }
 
 fn prover(
-    mut protocol: CDS94,
+    protocol: CDS94,
     cdsprover: CDS94Prover,
     active_clauses: Vec<bool>,
     challenge: Scalar,
@@ -153,6 +154,7 @@ pub fn cds94_benchmark(c: &mut Criterion) {
             active_clauses,
             challenge,
         );
+        group.throughput(Throughput::Elements(n as u64));
         group.measurement_time(Duration::from_secs(10));
         group.bench_with_input(
             BenchmarkId::new("prover_bench", &proverparams),

@@ -3,11 +3,11 @@
 
 // extern crate test;
 
-// mod comm;
-// mod compiler;
-// mod fiat;
-// mod schnorr;
-// mod stack;
+mod comm;
+pub mod compiler;
+pub mod fiat;
+pub mod schnorr;
+mod stack;
 
 // use compiler::*;
 
@@ -19,11 +19,11 @@
 // use curve25519_dalek::ristretto::RistrettoPoint;
 // use curve25519_dalek::scalar::Scalar;
 
-// #[derive(Copy, Clone)]
-// pub enum Side {
-//     Left,
-//     Right,
-// }
+#[derive(Copy, Clone)]
+pub enum Side {
+    Left,
+    Right,
+}
 
 // type S2 = compiler::Compiled<schnorr::Schnorr>;
 // type S4 = compiler::Compiled<S2>;

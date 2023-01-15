@@ -17,8 +17,10 @@ pub struct Signature<S: Stackable> {
 
 impl<S: Stackable> Message for Signature<S> {
     fn write<W: Write>(&self, writer: &mut W) {
-        self.a.write(writer);
-        self.z.write(writer);
+        self.a
+            .write(writer);
+        self.z
+            .write(writer);
     }
 }
 
@@ -37,11 +39,15 @@ impl<S: Stackable> SignatureScheme<S> {
             // hash first round and message
             let mut h = Sha512::new();
             a.write(&mut h);
-            h.write(msg).unwrap();
+            h.write(msg)
+                .unwrap();
 
             // convert to challenge
             let mut c: [u8; 64] = [0u8; 64];
-            c.copy_from_slice(&h.finalize());
+            c.copy_from_slice(
+                &h.finalize()
+                    .as_slice(),
+            );
             S::Challenge::new(&c)
         };
 

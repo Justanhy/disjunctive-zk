@@ -13,13 +13,17 @@ use crate::stack::*;
 
 impl Message for CompressedRistretto {
     fn write<W: Write>(&self, writer: &mut W) {
-        writer.write_all(self.as_bytes()).unwrap();
+        writer
+            .write_all(self.as_bytes())
+            .unwrap();
     }
 }
 
 impl Message for Scalar {
     fn write<W: Write>(&self, writer: &mut W) {
-        writer.write_all(self.as_bytes()).unwrap();
+        writer
+            .write_all(self.as_bytes())
+            .unwrap();
     }
 }
 

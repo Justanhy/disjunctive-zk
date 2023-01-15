@@ -1,14 +1,14 @@
 use core::fmt;
-use std::{borrow::BorrowMut, time::Duration};
+use std::time::Duration;
 
 use cds_compiler::*;
 use criterion::{
-    black_box, criterion_group, criterion_main, Bencher, BenchmarkId,
-    Criterion, Throughput,
+    criterion_group, criterion_main, Bencher, BenchmarkId, Criterion,
 };
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand_chacha::ChaCha20Rng;
 use rand_core::SeedableRng;
+use schnorr::sigma::{SigmaProtocol, SigmaProver, SigmaVerifier};
 use schnorr::*;
 
 fn bench_init(n: usize, d: usize) -> CDS94Test {
@@ -79,14 +79,21 @@ fn prover(
     active_clauses: Vec<bool>,
     challenge: Scalar,
 ) -> (Vec<RistrettoPoint>, Vec<(Scalar, Scalar)>) {
-    let commitment = protocol.first_message(&active_clauses);
-    let proof = protocol.second_message(
+    let (transcripts, commitments) = CDS94::first(
+        &protocol,
         cdsprover.borrow_witnesses(),
-        challenge,
-        &active_clauses,
         &mut cdsprover.get_rng(),
+        &active_clauses,
     );
-    (commitment, proof)
+    let proof = CDS94::third(
+        &protocol,
+        &transcripts,
+        cdsprover.borrow_witnesses(),
+        &challenge,
+        &mut cdsprover.get_rng(),
+        &active_clauses,
+    );
+    (commitments, proof)
 }
 
 struct ProverBenchParam(CDS94, CDS94Prover, Vec<bool>, Scalar);

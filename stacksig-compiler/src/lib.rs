@@ -4,10 +4,12 @@
 // extern crate test;
 
 mod comm;
+pub mod commitment_scheme;
 pub mod compiler;
 pub mod fiat;
 pub mod schnorr;
 mod stack;
+mod util;
 
 // use compiler::*;
 

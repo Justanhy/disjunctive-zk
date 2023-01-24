@@ -134,7 +134,7 @@ fn hash<M: Message>(v: &M) -> Scalar {
 
 fn hash_option<M: Message>(v: Option<&M>) -> Scalar {
     v.map(hash)
-        .unwrap_or(Scalar::zero())
+        .unwrap_or(Scalar::ZERO)
 }
 
 impl CommitKey {

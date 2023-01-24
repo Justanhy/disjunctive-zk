@@ -6,7 +6,7 @@ use std::io::Write;
 
 use std::marker::PhantomData;
 
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRngCore;
 
 #[derive(Debug)]
 pub struct Compiled<S: Stackable>(pub PhantomData<S>);
@@ -109,7 +109,7 @@ impl<S: Stackable> Stackable for Compiled<S> {
 
     const CLAUSES: usize = 2 * S::CLAUSES;
 
-    fn sigma_a<R: RngCore + CryptoRng>(
+    fn sigma_a<R: CryptoRngCore>(
         rng: &mut R,
         witness: &Self::Witness,
     ) -> (Self::State, Self::MessageA) {

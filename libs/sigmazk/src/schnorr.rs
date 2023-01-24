@@ -1,5 +1,3 @@
-use curve25519_dalek::digest::typenum::Zero;
-
 use crate::*;
 
 /// Transcript for the Schnorr protocol
@@ -131,14 +129,6 @@ impl SigmaProtocol for Schnorr {
         // TODO: Allow use with state (remove re-computation)
         challenge * witness + Scalar::random(prover_rng)
     }
-
-    // fn simulate(
-    //     statement: &Schnorr,
-    //     challenge: &Scalar,
-    //     z: &Scalar,
-    // ) -> Self::A {
-    //     &RISTRETTO_BASEPOINT_TABLE * z - challenge * statement.pub_key
-    // }
 
     fn verify(
         statement: &Schnorr,

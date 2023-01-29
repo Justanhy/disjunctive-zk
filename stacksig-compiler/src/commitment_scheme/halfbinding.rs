@@ -81,6 +81,32 @@ impl EquivKey {
 
 /// Implementation of 1-of-2 partially-binding vector commitment scheme
 impl HalfBinding {
+    fn g2_from_g1(
+        g1: &RistrettoPoint,
+        g0: &RistrettoBasepointTable,
+    ) -> RistrettoPoint {
+        g1 + g0.basepoint()
+    }
+
+    fn g1_from_g2(
+        g2: &RistrettoPoint,
+        g0: &RistrettoBasepointTable,
+    ) -> RistrettoPoint {
+        g2 - g0.basepoint()
+    }
+
+    fn commitment<M: Message + ?Sized>(
+        gi: &RistrettoPoint,
+        h: &RistrettoBasepointTable,
+        message: Option<&M>,
+        rand: &Scalar,
+    ) -> CompressedRistretto {
+        (h * rand
+            + gi * &message
+                .map(|val| hash(val))
+                .unwrap_or(Scalar::ZERO))
+            .compress()
+    }
     /// Generate public parameters for the commitment scheme
     pub fn setup<R: CryptoRngCore>(rng: &mut R) -> PublicParams {
         let h = &Scalar::random(rng) * &RISTRETTO_BASEPOINT_TABLE;
@@ -107,7 +133,7 @@ impl HalfBinding {
         match binding_side {
             Side::One => {
                 let g2 = h * &equiv_scalar;
-                let g1 = &g2 + g0 * &Scalar::ONE.invert();
+                let g1 = Self::g1_from_g2(&g2, g0);
                 let commit_key = CommitKey(g1.compress());
                 (
                     commit_key,
@@ -169,7 +195,7 @@ impl HalfBinding {
     /// which side is the binding side.
     /// 3. Return the commitment for both sides together
     ///
-    pub fn bind<M: Message>(
+    pub fn bind<M: Message + ?Sized>(
         pp: &PublicParams,
         ck: CommitKey,
         msg: (Option<&M>, Option<&M>),
@@ -180,29 +206,14 @@ impl HalfBinding {
         let g1 = g1
             .decompress()
             .unwrap();
-        let g2 = &g1 + g0.basepoint();
+        let g2 = Self::g2_from_g1(&g1, g0);
 
         let (m1, m2) = msg;
         let Randomness(r1, r2) = randomness;
         // We hash the message so that we can commit to longer strings
-        let comm1 = h * &r1
-            + &g1
-                * &m1
-                    .map(|m| hash(m))
-                    .unwrap_or(Scalar::ZERO);
-        let comm2 = h * &r2
-            + &g2
-                * &m2
-                    .map(|m| hash(m))
-                    .unwrap_or(Scalar::ZERO);
-        Commitment(
-            *comm1
-                .compress()
-                .as_bytes(),
-            *comm2
-                .compress()
-                .as_bytes(),
-        )
+        let comm1 = Self::commitment(&g1, h, m1, &r1);
+        let comm2 = Self::commitment(&g2, h, m2, &r2);
+        Commitment(*comm1.as_bytes(), *comm2.as_bytes())
     }
 
     // / Commit to a message in it's binding side
@@ -233,10 +244,11 @@ impl HalfBinding {
     ///
     /// ## Returns
     /// The 2-tuple of bytes representing the commitment of each side
-    pub fn equivcom<M: Message>(
+    pub fn equivcom<M: Message + ?Sized>(
         pp: &PublicParams,
         ek: &EquivKey,
         msg: (Option<&M>, Option<&M>),
+        randomness: Option<Randomness>,
     ) -> (Commitment, Randomness) {
         let EquivKey {
             binding_side,
@@ -244,43 +256,26 @@ impl HalfBinding {
             ..
         } = ek;
 
+        let PublicParams(g0, h) = pp;
         let CommitKey(g1) = commit_key;
         let g1 = g1
             .decompress()
             .unwrap();
-        let PublicParams(g0, h) = pp;
-        let g2 = &g1 + g0.basepoint();
+        let g2 = Self::g2_from_g1(&g1, g0);
 
-        let (v1, v2) = match binding_side {
-            Side::One => (
-                msg.0
-                    .map(|v| hash(v))
-                    .unwrap_or(Scalar::ZERO),
-                Scalar::ZERO,
-            ),
-            Side::Two => (
-                Scalar::ZERO,
-                msg.1
-                    .map(|v| hash(v))
-                    .unwrap_or(Scalar::ZERO),
+        let (r1, r2) = match randomness {
+            Some(rand) => (rand.0, rand.1),
+            None => (
+                Scalar::random(&mut ChaCha20Rng::from_entropy()),
+                Scalar::random(&mut ChaCha20Rng::from_entropy()),
             ),
         };
 
-        let r1 = Scalar::random(&mut ChaCha20Rng::from_entropy());
-        let r2 = Scalar::random(&mut ChaCha20Rng::from_entropy());
-
-        let comm1 = h * &r1 + &g1 * &v1;
-        let comm2 = h * &r2 + &g2 * &v2;
+        let comm1 = Self::commitment(&g1, h, msg.0, &r1);
+        let comm2 = Self::commitment(&g2, h, msg.1, &r2);
 
         (
-            Commitment(
-                *comm1
-                    .compress()
-                    .as_bytes(),
-                *comm2
-                    .compress()
-                    .as_bytes(),
-            ),
+            Commitment(*comm1.as_bytes(), *comm2.as_bytes()),
             Randomness(r1, r2),
         )
     }
@@ -299,7 +294,7 @@ impl HalfBinding {
     /// ## Returns
     /// The new auxiliary information for equivocation (i.e. updated randomness
     /// for the equivocable side)
-    pub fn equiv<M: Message>(
+    pub fn equiv<M: Message + ?Sized>(
         ek: &EquivKey,
         old: (Option<&M>, Option<&M>),
         new: (Option<&M>, Option<&M>),
@@ -320,11 +315,11 @@ impl HalfBinding {
                     .1
                     .map(|m| hash(m))
                     .unwrap_or(Scalar::ZERO);
-                let new2 = new
+                let new_equiv = new
                     .1
                     .map(|m| hash(m))
                     .unwrap_or(Scalar::ZERO);
-                let delta = &new2 - &old2;
+                let delta = &new_equiv - &old2;
                 Randomness(r1, r2 - equiv_scalar * delta)
             }
             Side::Two => {
@@ -333,12 +328,12 @@ impl HalfBinding {
                     .0
                     .map(|m| hash(m))
                     .unwrap_or(Scalar::ZERO);
-                let new1 = new
+                let new_equiv = new
                     .0
                     .map(|m| hash(m))
                     .unwrap_or(Scalar::ZERO);
-                let delta = &new1 - &old1;
-                Randomness(r1 - equiv_scalar * delta, r2)
+                let delta = &new_equiv - &old1;
+                Randomness(r1 - equiv_scalar * new_equiv, r2)
             }
         }
     }
@@ -351,12 +346,61 @@ mod tests {
     use rand_core::SeedableRng;
 
     #[test]
+    fn test_g1g2() {
+        let (pp, ck, ..) = HalfBinding::setupgen(
+            &mut ChaCha20Rng::from_seed([0u8; 32]),
+            Side::One,
+        );
+        let g1 =
+            ck.0.decompress()
+                .unwrap();
+        let g2 = HalfBinding::g2_from_g1(&g1, &pp.0);
+        assert_eq!(
+            g2,
+            g1 + pp
+                .0
+                .basepoint()
+        );
+        assert_eq!(g1, HalfBinding::g1_from_g2(&g2, &pp.0));
+        let (pp, ck, ..) = HalfBinding::setupgen(
+            &mut ChaCha20Rng::from_seed([0u8; 32]),
+            Side::Two,
+        );
+        let g1 =
+            ck.0.decompress()
+                .unwrap();
+        let g2 = HalfBinding::g2_from_g1(&g1, &pp.0);
+        assert_eq!(
+            g2,
+            g1 + pp
+                .0
+                .basepoint()
+        );
+        assert_eq!(g1, HalfBinding::g1_from_g2(&g2, &pp.0));
+    }
+
+    #[test]
     fn test_half_binding() {
-        let mut rng = ChaCha20Rng::from_entropy();
-        let pp = HalfBinding::setup(&mut rng);
+        let rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
+        let aux = Randomness(
+            Scalar::random(&mut ChaCha20Rng::from_seed([1u8; 32])),
+            Scalar::random(&mut ChaCha20Rng::from_seed([2u8; 32])),
+        );
+        let msg = "hello world";
+        let msg2 = "goodbye world";
+        let m = (Some(msg.as_bytes()), None);
+        let m_equiv = (Some(msg.as_bytes()), Some(msg2.as_bytes()));
+        let pp = HalfBinding::setup(rng);
         let (ck, ek) = HalfBinding::gen(&pp, Side::One);
-        let (ck2, ek2) = HalfBinding::gen(&pp, Side::Two);
-        assert_ne!(ck, ck2);
-        assert_ne!(ek, ek2);
+
+        let (comm_old, aux_old) = HalfBinding::equivcom(&pp, &ek, m, Some(aux));
+        let comm_old_bind = HalfBinding::bind(&pp, ck, m, aux_old);
+        assert_eq!(comm_old, comm_old_bind);
+
+        let aux_new = HalfBinding::equiv(&ek, m, m_equiv, aux_old);
+        let (comm_equivcom, _) =
+            HalfBinding::equivcom(&pp, &ek, m_equiv, Some(aux_new));
+        let comm_bind = HalfBinding::bind(&pp, ck, m_equiv, aux_new);
+        assert_eq!(comm_equivcom, comm_bind);
     }
 }

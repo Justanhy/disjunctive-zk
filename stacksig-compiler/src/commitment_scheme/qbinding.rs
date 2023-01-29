@@ -102,7 +102,7 @@ impl QBinding {
         // Create v_a which is None except at the binding index for A
         let v_a = Self::inner(binding_index, msg, ia);
         // Commit to v_a
-        let (ca, ra) = HalfBinding::equivcom(&pp.a, eka, v_a);
+        let (ca, ra) = HalfBinding::equivcom(&pp.a, eka, v_a, None);
         // Create v_b which is None except at the binding index for B
         let mut v_b: (Option<&Commitment>, Option<&Commitment>) = (None, None);
         match ib {
@@ -110,7 +110,7 @@ impl QBinding {
             Side::Two => v_b.1 = Some(&ca),
         };
         // Commit to v_b
-        let (cb, rb) = HalfBinding::equivcom(&pp.b, ekb, v_b);
+        let (cb, rb) = HalfBinding::equivcom(&pp.b, ekb, v_b, None);
         (cb, Randomness { a: ra, b: rb })
     }
 
@@ -200,5 +200,18 @@ impl QBinding {
             Side::One => (Some(new.0), Some(new.1)),
             Side::Two => (Some(new.2), Some(new.3)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rand_chacha::ChaCha20Rng;
+    use rand_core::SeedableRng;
+
+    use super::*;
+
+    #[test]
+    fn test_qbinding() {
+        let rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
     }
 }

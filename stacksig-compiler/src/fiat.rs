@@ -1,7 +1,7 @@
 use sha2::{Digest, Sha512};
 
-use std::io::Write;
 use std::marker::PhantomData;
+use std::{fmt::Debug, io::Write};
 
 use rand_core::{CryptoRng, RngCore};
 
@@ -15,7 +15,7 @@ pub struct Signature<S: Stackable> {
     z: S::MessageZ,
 }
 
-impl<S: Stackable> Message for Signature<S> {
+impl<S: Stackable + Debug> Message for Signature<S> {
     fn write<W: Write>(&self, writer: &mut W) {
         self.a
             .write(writer);

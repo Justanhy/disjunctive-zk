@@ -3,9 +3,7 @@
 
 use std::io::Write;
 
-use curve25519_dalek::constants::{
-    RISTRETTO_BASEPOINT_POINT, RISTRETTO_BASEPOINT_TABLE,
-};
+use curve25519_dalek::constants::RISTRETTO_BASEPOINT_TABLE;
 use curve25519_dalek::ristretto::{
     CompressedRistretto, RistrettoBasepointTable, RistrettoPoint,
 };
@@ -63,7 +61,7 @@ pub struct EquivKey {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
-pub struct Randomness(Scalar, Scalar);
+pub struct Randomness(pub Scalar, pub Scalar);
 
 impl EquivKey {
     pub fn new(
@@ -250,34 +248,26 @@ impl HalfBinding {
         msg: (Option<&M>, Option<&M>),
         randomness: Option<Randomness>,
     ) -> (Commitment, Randomness) {
-        let EquivKey {
-            binding_side,
-            commit_key,
-            ..
-        } = ek;
+        let EquivKey { commit_key, .. } = ek;
 
-        let PublicParams(g0, h) = pp;
-        let CommitKey(g1) = commit_key;
-        let g1 = g1
-            .decompress()
-            .unwrap();
-        let g2 = Self::g2_from_g1(&g1, g0);
-
-        let (r1, r2) = match randomness {
-            Some(rand) => (rand.0, rand.1),
-            None => (
+        let rand = match randomness {
+            Some(rand) => rand,
+            None => Randomness(
                 Scalar::random(&mut ChaCha20Rng::from_entropy()),
                 Scalar::random(&mut ChaCha20Rng::from_entropy()),
             ),
         };
 
-        let comm1 = Self::commitment(&g1, h, msg.0, &r1);
-        let comm2 = Self::commitment(&g2, h, msg.1, &r2);
+        // let PublicParams(g0, h) = pp;
+        // let CommitKey(g1) = commit_key;
+        // let g1 = g1
+        //     .decompress()
+        //     .unwrap();
+        // let g2 = Self::g2_from_g1(&g1, g0);
+        // let comm1 = Self::commitment(&g1, h, msg.0, &r1);
+        // let comm2 = Self::commitment(&g2, h, msg.1, &r2);
 
-        (
-            Commitment(*comm1.as_bytes(), *comm2.as_bytes()),
-            Randomness(r1, r2),
-        )
+        (Self::bind(&pp, *commit_key, msg, rand), rand)
     }
 
     /// Equivocates the message on the equivocable side
@@ -298,14 +288,14 @@ impl HalfBinding {
         ek: &EquivKey,
         old: (Option<&M>, Option<&M>),
         new: (Option<&M>, Option<&M>),
-        r: Randomness,
+        old_aux: Randomness,
     ) -> Randomness {
         let EquivKey {
             binding_side,
             equiv_scalar,
             ..
         } = ek;
-        let Randomness(r1, r2) = r;
+        let Randomness(r1, r2) = old_aux;
 
         // randomness for binding side does not change, equiv side changes
         match binding_side {
@@ -333,7 +323,7 @@ impl HalfBinding {
                     .map(|m| hash(m))
                     .unwrap_or(Scalar::ZERO);
                 let delta = &new_equiv - &old1;
-                Randomness(r1 - equiv_scalar * new_equiv, r2)
+                Randomness(r1 - equiv_scalar * delta, r2)
             }
         }
     }

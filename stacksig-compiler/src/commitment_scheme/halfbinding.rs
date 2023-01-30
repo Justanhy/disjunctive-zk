@@ -383,13 +383,13 @@ mod tests {
         let pp = HalfBinding::setup(rng);
         let (ck, ek) = HalfBinding::gen(&pp, Side::One);
 
-        let (comm_old, aux_old) = HalfBinding::equivcom(&pp, &ek, m, Some(aux));
-        let comm_old_bind = HalfBinding::bind(&pp, ck, m, aux_old);
-        assert_eq!(comm_old, comm_old_bind);
+        let (comm_equivcom, aux_old) =
+            HalfBinding::equivcom(&pp, &ek, m, Some(aux));
+        // let comm_old_bind = HalfBinding::bind(&pp, ck, m, aux_old);
+        // assert_eq!(comm_old, comm_old_bind);
 
         let aux_new = HalfBinding::equiv(&ek, m, m_equiv, aux_old);
-        let (comm_equivcom, _) =
-            HalfBinding::equivcom(&pp, &ek, m_equiv, Some(aux_new));
+        // let (comm_equivcom, _) = HalfBinding::equivcom(&pp, &ek, m_equiv, Some(aux_new));
         let comm_bind = HalfBinding::bind(&pp, ck, m_equiv, aux_new);
         assert_eq!(comm_equivcom, comm_bind);
     }

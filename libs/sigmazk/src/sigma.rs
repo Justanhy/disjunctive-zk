@@ -11,11 +11,11 @@ pub trait SigmaProtocol {
     type Witness;
 
     /// First round message
-    type A;
+    type MessageA;
     /// Challenge (Second round message)
-    type C;
+    type Challenge;
     /// Third round message
-    type Z;
+    type MessageZ;
 
     /// On every protocol execution (i.e. interaction between the prover and the verifier)
     /// there is a particular *state* for that execution. This *state* contains contextual information for the
@@ -24,28 +24,20 @@ pub trait SigmaProtocol {
     /// Contextual information that is private to the prover but required by the protocol.
     type ProverContext;
 
-    // fn simulate(
-    //     statement: &Self::Statement,
-    //     challenge: &Self::C,
-    //     z: &Self::Z,
-    // ) -> Self::A
-    // where
-    //     Self: Sized;
-
     /// The first message in a Sigma protocol (sent by the Prover).
     fn first<R: CryptoRngCore>(
         statement: &Self::Statement,
         witness: &Self::Witness,
         prover_rng: &mut R,
         prover_context: &Self::ProverContext,
-    ) -> (Self::State, Self::A)
+    ) -> (Self::State, Self::MessageA)
     where
         Self: Sized;
 
     /// The second message in a Sigma protocol (sent by the Verifier).
     ///
     /// Usually, this is a challenge sent by the Verifier to the Prover.
-    fn second<R: CryptoRngCore>(verifier_rng: &mut R) -> Self::C
+    fn second<R: CryptoRngCore>(verifier_rng: &mut R) -> Self::Challenge
     where
         Self: Sized;
 
@@ -54,10 +46,10 @@ pub trait SigmaProtocol {
         statement: &Self::Statement,
         state: &Self::State,
         witness: &Self::Witness,
-        challenge: &Self::C,
+        challenge: &Self::Challenge,
         prover_rng: &mut R,
         prover_context: &Self::ProverContext,
-    ) -> Self::Z
+    ) -> Self::MessageZ
     where
         Self: Sized;
 
@@ -77,9 +69,9 @@ pub trait SigmaProtocol {
     /// - `false` otherwise
     fn verify(
         statement: &Self::Statement,
-        a: &Self::A,
-        c: &Self::C,
-        z: &Self::Z,
+        a: &Self::MessageA,
+        c: &Self::Challenge,
+        z: &Self::MessageZ,
     ) -> bool
     where
         Self: Sized;
@@ -88,24 +80,24 @@ pub trait SigmaProtocol {
 /// Trait for the transcripts in Sigma protocols
 ///
 /// **Trait Types**
-/// - `A` Type of the first message (the commitment of the Prover)
-/// - `C` Type of the second message (sent by the Verifier)
-/// - `Z` Type of the third message (sent by the Prover which the Verifier uses to validate the prover)
+/// - `MessageA` Type of the first message (the commitment of the Prover)
+/// - `Challenge` Type of the second message (sent by the Verifier)
+/// - `MessageZ` Type of the third message (sent by the Prover which the Verifier uses to validate the prover)
 ///
 /// These are generic types that the Sigma protocol concrete implementation will define
 pub trait SigmaTranscript {
     /// Commitment (First round message)
-    type A;
+    type MessageA;
     /// Challenge (Second round message)
-    type C;
+    type Challenge;
     /// Proof (Third round message)
-    type Z;
+    type MessageZ;
 
-    fn get_commitment(&self) -> Option<Self::A>;
+    fn get_commitment(&self) -> Option<Self::MessageA>;
 
-    fn get_challenge(&self) -> Option<Self::C>;
+    fn get_challenge(&self) -> Option<Self::Challenge>;
 
-    fn get_proof(&self) -> Option<Self::Z>;
+    fn get_proof(&self) -> Option<Self::MessageZ>;
 
     fn is_new(&self) -> bool {
         self.get_commitment()

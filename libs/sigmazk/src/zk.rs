@@ -12,7 +12,7 @@ pub trait ZeroKnowledge {
 pub trait EHVzk: SigmaProtocol {
     fn simulate(
         statement: &Self::Statement,
-        challenge: &Self::C,
-        z: &Self::Z,
-    ) -> Self::A;
+        challenge: &Self::Challenge,
+        z: &Self::MessageZ,
+    ) -> Self::MessageA;
 }

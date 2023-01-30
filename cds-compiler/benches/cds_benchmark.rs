@@ -7,7 +7,10 @@ use criterion::{
     criterion_group, criterion_main, Bencher, BenchmarkId, Criterion,
     Throughput,
 };
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use curve25519_dalek::{
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
+};
 use rand_chacha::ChaCha20Rng;
 use rand_core::SeedableRng;
 use sigmazk::*;
@@ -79,7 +82,7 @@ fn prover(
     cdsprover: CDS94Prover,
     active_clauses: Vec<bool>,
     challenge: Scalar,
-) -> (Vec<RistrettoPoint>, Vec<(Scalar, Scalar)>) {
+) -> (Vec<CompressedRistretto>, Vec<(Scalar, Scalar)>) {
     let (transcripts, commitments) = CDS94::first(
         &protocol,
         cdsprover.borrow_witnesses(),
@@ -117,7 +120,7 @@ fn verifier(verifier_params: &VerifierBenchParam) -> bool {
 
 struct VerifierBenchParam(
     CDS94,
-    Vec<RistrettoPoint>,
+    Vec<CompressedRistretto>,
     Scalar,
     Vec<(Scalar, Scalar)>,
 );

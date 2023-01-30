@@ -1,12 +1,14 @@
+use curve25519_dalek::ristretto::CompressedRistretto;
+
 use crate::*;
 // TODO: Implement generic sigma type
 // type Sigma = Box<dyn SigmaProtocol<
 //     Statement = dyn Any,
 //     Witness = dyn Any,
 //     State = dyn Any,
-//     A = dyn Any,
-//     C = dyn Any,
-//     Z = dyn Any,
+//     MessageA = dyn Any,
+//     Challenge = dyn Any,
+//     MessageZ = dyn Any,
 //     ProverContext =  dyn Any
 // >>;
 type Sigma = Box<Schnorr>;
@@ -34,18 +36,23 @@ impl fmt::Display for CDS94 {
     }
 }
 
-type SigTrans =
-    Box<dyn SigmaTranscript<A = RistrettoPoint, C = Scalar, Z = Scalar>>;
+type SigTrans = Box<
+    dyn SigmaTranscript<
+        MessageA = CompressedRistretto,
+        Challenge = Scalar,
+        MessageZ = Scalar,
+    >,
+>;
 
 impl SigmaProtocol for CDS94 {
     type Statement = CDS94;
     type Witness = Vec<Scalar>;
-    // type State = Vec<Box<SchnorrTranscript>>; // dyn SigmaTranscript<A = RistrettoPoint, C = Scalar, Z = Scalar>
+    // type State = Vec<Box<SchnorrTranscript>>; // dyn SigmaTranscript<MessageA = RistrettoPoint, Challenge = Scalar, MessageZ = Scalar>
     type State = Vec<SigTrans>;
 
-    type A = Vec<RistrettoPoint>;
-    type C = Scalar;
-    type Z = Vec<(Scalar, Scalar)>;
+    type MessageA = Vec<CompressedRistretto>;
+    type Challenge = Scalar;
+    type MessageZ = Vec<(Scalar, Scalar)>;
 
     type ProverContext = Vec<bool>;
 
@@ -54,7 +61,7 @@ impl SigmaProtocol for CDS94 {
         _witness: &Self::Witness,
         _prover_rng: &mut R,
         active_clauses: &Vec<bool>,
-    ) -> (Self::State, Self::A) {
+    ) -> (Self::State, Self::MessageA) {
         assert!(active_clauses.len() == statement.n);
 
         let transcripts: Self::State = active_clauses
@@ -81,7 +88,7 @@ impl SigmaProtocol for CDS94 {
             .collect();
         // let mut _error: Option<Error> = None; // For error propagation
 
-        let commitment: Self::A = transcripts
+        let commitment: Self::MessageA = transcripts
             .iter()
             .map(|t| {
                 t.get_commitment()
@@ -91,7 +98,7 @@ impl SigmaProtocol for CDS94 {
         (transcripts, commitment)
     }
 
-    fn second<R: CryptoRngCore>(verifier_rng: &mut R) -> Self::C {
+    fn second<R: CryptoRngCore>(verifier_rng: &mut R) -> Self::Challenge {
         Scalar::random(verifier_rng)
     }
 
@@ -99,10 +106,10 @@ impl SigmaProtocol for CDS94 {
         statement: &Self::Statement,
         state: &Self::State,
         witness: &Self::Witness,
-        challenge: &Self::C,
+        challenge: &Self::Challenge,
         prover_rng: &mut R,
         active_clauses: &Vec<bool>,
-    ) -> Self::Z {
+    ) -> Self::MessageZ {
         let shares =
             CDS94::fill_missing_shares(&state, *challenge, active_clauses);
 
@@ -178,9 +185,9 @@ impl SigmaProtocol for CDS94 {
 
     fn verify(
         statement: &Self::Statement,
-        a: &Self::A,
-        secret: &Self::C,
-        z: &Self::Z,
+        a: &Self::MessageA,
+        secret: &Self::Challenge,
+        z: &Self::MessageZ,
     ) -> bool {
         let cs = z
             .iter()

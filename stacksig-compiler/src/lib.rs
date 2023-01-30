@@ -5,6 +5,7 @@
 
 mod comm;
 pub mod commitment_scheme;
+pub mod stackable;
 pub mod compiler;
 pub mod fiat;
 pub mod schnorr;

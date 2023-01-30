@@ -1,28 +1,30 @@
+use curve25519_dalek::ristretto::CompressedRistretto;
+
 use crate::*;
 
 /// Transcript for the Schnorr protocol
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SchnorrTranscript {
-    pub commitment: Option<RistrettoPoint>,
+    pub commitment: Option<CompressedRistretto>,
     pub challenge: Option<Scalar>,
     pub proof: Option<Scalar>,
 }
 
 /// Implementation of SigmaTranscript for SchnorrTranscript
 impl SigmaTranscript for SchnorrTranscript {
-    type A = RistrettoPoint;
-    type C = Scalar;
-    type Z = Scalar;
+    type MessageA = CompressedRistretto;
+    type Challenge = Scalar;
+    type MessageZ = Scalar;
 
-    fn get_commitment(&self) -> Option<Self::A> {
+    fn get_commitment(&self) -> Option<Self::MessageA> {
         self.commitment
     }
 
-    fn get_challenge(&self) -> Option<Self::C> {
+    fn get_challenge(&self) -> Option<Self::Challenge> {
         self.challenge
     }
 
-    fn get_proof(&self) -> Option<Self::Z> {
+    fn get_proof(&self) -> Option<Self::MessageZ> {
         self.proof
     }
 }
@@ -97,9 +99,9 @@ impl SigmaProtocol for Schnorr {
     type Witness = Scalar;
 
     type State = Scalar;
-    type A = RistrettoPoint;
-    type C = Scalar;
-    type Z = Scalar;
+    type MessageA = CompressedRistretto;
+    type Challenge = Scalar;
+    type MessageZ = Scalar;
 
     type ProverContext = ();
 
@@ -108,13 +110,13 @@ impl SigmaProtocol for Schnorr {
         _witness: &Scalar,
         prover_rng: &mut R,
         _: &(),
-    ) -> (Self::State, Self::A) {
+    ) -> (Self::State, Self::MessageA) {
         let state = Scalar::random(prover_rng);
         let message = &state * &RISTRETTO_BASEPOINT_TABLE;
-        (state, message)
+        (state, message.compress())
     }
 
-    fn second<R: CryptoRngCore>(verifier_rng: &mut R) -> Self::C {
+    fn second<R: CryptoRngCore>(verifier_rng: &mut R) -> Self::Challenge {
         Scalar::random(verifier_rng)
     }
 
@@ -125,18 +127,20 @@ impl SigmaProtocol for Schnorr {
         challenge: &Scalar,
         prover_rng: &mut R,
         _: &(),
-    ) -> Self::Z {
+    ) -> Self::MessageZ {
         // TODO: Allow use with state (remove re-computation)
         challenge * witness + Scalar::random(prover_rng)
     }
 
     fn verify(
         statement: &Schnorr,
-        a: &RistrettoPoint,
+        a: &CompressedRistretto,
         c: &Scalar,
         z: &Scalar,
     ) -> bool {
-        &RISTRETTO_BASEPOINT_TABLE * z - c * statement.pub_key == *a
+        &RISTRETTO_BASEPOINT_TABLE * z - c * statement.pub_key
+            == a.decompress()
+                .unwrap()
     }
 }
 pub struct SimArgs {
@@ -157,7 +161,7 @@ impl ZeroKnowledge for Schnorr {
             challenge,
         } = args;
         let commitment =
-            Some(&RISTRETTO_BASEPOINT_TABLE * &proof - challenge * pub_key);
+            Some((&RISTRETTO_BASEPOINT_TABLE * &proof - challenge * pub_key).compress());
         SchnorrTranscript {
             commitment,
             challenge: Some(challenge),
@@ -170,10 +174,11 @@ impl ZeroKnowledge for Schnorr {
 impl EHVzk for Schnorr {
     fn simulate(
         statement: &Self::Statement,
-        challenge: &Self::C,
-        z: &Self::Z,
-    ) -> Self::A {
-        &RISTRETTO_BASEPOINT_TABLE * z - challenge * statement.pub_key
+        challenge: &Self::Challenge,
+        z: &Self::MessageZ,
+    ) -> Self::MessageA {
+        (&RISTRETTO_BASEPOINT_TABLE * z - challenge * statement.pub_key)
+            .compress()
     }
 }
 

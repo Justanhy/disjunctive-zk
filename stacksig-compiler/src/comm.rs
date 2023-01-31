@@ -1,4 +1,4 @@
-use curve25519_dalek::constants;
+use curve25519_dalek::constants::{self, RISTRETTO_BASEPOINT_TABLE};
 use curve25519_dalek::ristretto::{
     CompressedRistretto, RistrettoBasepointTable,
 };
@@ -17,6 +17,15 @@ use std::io::Write;
 
 use std::rc::Rc;
 
+impl Default for CommitKey {
+    fn default() -> Self {
+        CommitKey(
+            Rc::new(RISTRETTO_BASEPOINT_TABLE.clone()),
+            Rc::new(RISTRETTO_BASEPOINT_TABLE.clone()),
+        )
+    }
+}
+
 impl Message for CommitKey {
     fn write<W: Write>(&self, writer: &mut W) {
         let cp = self
@@ -33,6 +42,12 @@ pub type Randomness = Scalar;
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct Commitment([u8; 32]);
+
+impl Default for Commitment {
+    fn default() -> Self {
+        Commitment([0; 32])
+    }
+}
 
 impl Message for Commitment {
     fn write<W: Write>(&self, writer: &mut W) {

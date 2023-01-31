@@ -1,15 +1,15 @@
-// #![feature(associated_type_defaults)]
+#![feature(associated_type_defaults)]
 // #![feature(test)]
 
 // extern crate test;
 
 mod comm;
 pub mod commitment_scheme;
-pub mod stackable;
 pub mod compiler;
 pub mod fiat;
 pub mod schnorr;
 mod stack;
+pub mod stackable;
 mod util;
 
 // use compiler::*;
@@ -56,8 +56,9 @@ pub enum Side {
 
 // macro_rules! compile {
 //     ($pks:expr, $sk:expr) => {{
-//         let sk = CompiledWitness::new($sk, Side::Left); // for benchmarking the signer is always the left-most key
-//         let len = $pks.len() / 2;
+//         let sk = CompiledWitness::new($sk, Side::Left);
+// // for benchmarking the signer is always the left-most
+// key         let len = $pks.len() / 2;
 //         let mut pk: Vec<_> = Vec::with_capacity(len);
 //         let mut pks = $pks.into_iter();
 //         for _ in 0..len {
@@ -122,15 +123,15 @@ pub enum Side {
 // macro_rules! bench_scheme {
 //     ($b:expr, $n:tt, $s:tt) => {{
 //         let sk = Scalar::random(&mut OsRng);
-//         let mut pk: Vec<RistrettoPoint> = Vec::with_capacity(1 << $n);
-//         pk.push(&sk * &RISTRETTO_BASEPOINT_TABLE);
-//         for _ in 1..(1 << $n) {
-//             pk.push(&Scalar::random(&mut OsRng) * &RISTRETTO_BASEPOINT_TABLE);
-//         }
+//         let mut pk: Vec<RistrettoPoint> =
+// Vec::with_capacity(1 << $n);         pk.push(&sk *
+// &RISTRETTO_BASEPOINT_TABLE);         for _ in 1..(1 <<
+// $n) {             pk.push(&Scalar::random(&mut OsRng) *
+// &RISTRETTO_BASEPOINT_TABLE);         }
 //         let (pk, sk) = compilen!($n, pk, sk);
 //         $b.iter(|| {
-//             let _sig = $s::sign(&mut OsRng, &sk, &pk[0], &[]);
-//         });
+//             let _sig = $s::sign(&mut OsRng, &sk, &pk[0],
+// &[]);         });
 //     }};
 // }
 

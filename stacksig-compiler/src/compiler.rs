@@ -18,6 +18,16 @@ pub struct CompiledMessageZ<Z: Message> {
     rd: Randomness,
 }
 
+impl<M: Message> Default for CompiledMessageZ<M> {
+    fn default() -> Self {
+        CompiledMessageZ {
+            z: M::default(),
+            ck: CommitKey::default(),
+            rd: Randomness::default(),
+        }
+    }
+}
+
 impl<M: Message> Message for CompiledMessageZ<M> {
     fn write<W: Write>(&self, writer: &mut W) {
         self.z
@@ -64,35 +74,35 @@ impl<W> CompiledWitness<W> {
     }
 }
 
-// if S is a compiled protocol, could pass PreSim into state check
+// if S is a compiled protocol, could pass PreSim into state
+// check
 
-/*
-impl<S: Stackable> Compiled<S> {
-    fn compile_witness<I: Iterator<Item = Side>>(
-        witness: <S as Stackable>::Witness,
-        path: &mut I,
-    ) -> <Self as Stackable>::Witness {
-        let side = path.next().unwrap();
-
-        if !S::is_leaf() {
-            S::compile_witness()
-        }
-
-        if S::is_leaf() {
-            CompiledWitness { side, witness }
-        } else {
-            unimplemented!()
-        }
-    }
-}
-*/
+// impl<S: Stackable> Compiled<S> {
+// fn compile_witness<I: Iterator<Item = Side>>(
+// witness: <S as Stackable>::Witness,
+// path: &mut I,
+// ) -> <Self as Stackable>::Witness {
+// let side = path.next().unwrap();
+//
+// if !S::is_leaf() {
+// S::compile_witness()
+// }
+//
+// if S::is_leaf() {
+// CompiledWitness { side, witness }
+// } else {
+// unimplemented!()
+// }
+// }
+// }
 
 impl<S: Stackable> Stackable for Compiled<S> {
     type Precompute = S::Precompute;
 
     type State = CompiledState<S::MessageA, S::State>;
 
-    // new witness consists of the old witness and a side: Left/Right
+    // new witness consists of the old witness and a side:
+    // Left/Right
     type Witness = CompiledWitness<S::Witness>;
 
     // new statement is a 2-tuple

@@ -146,25 +146,27 @@ impl CommitKey {
             let td = Scalar::random(rng);
             match side {
                 Side::Left => {
-                    let r = &td * &constants::RISTRETTO_BASEPOINT_TABLE;
+                    let r = &td * constants::RISTRETTO_BASEPOINT_TABLE;
                     let li = perm_inv(
                         r.compress()
                             .as_bytes(),
                     );
-                    if let Some(l) =
-                        CompressedRistretto::from_slice(&li).decompress()
+                    if let Some(l) = CompressedRistretto::from_slice(&li)
+                        .unwrap()
+                        .decompress()
                     {
                         break (td, l, r);
                     }
                 }
                 Side::Right => {
-                    let l = &td * &constants::RISTRETTO_BASEPOINT_TABLE;
+                    let l = &td * constants::RISTRETTO_BASEPOINT_TABLE;
                     let ri = perm(
                         l.compress()
                             .as_bytes(),
                     );
-                    if let Some(r) =
-                        CompressedRistretto::from_slice(&ri).decompress()
+                    if let Some(r) = CompressedRistretto::from_slice(&ri)
+                        .unwrap()
+                        .decompress()
                     {
                         break (td, l, r);
                     }
@@ -186,7 +188,7 @@ impl CommitKey {
         values: (Option<&M1>, Option<&M2>),
     ) -> Commitment {
         // add randomness
-        let comm = random * &constants::RISTRETTO_BASEPOINT_TABLE;
+        let comm = random * constants::RISTRETTO_BASEPOINT_TABLE;
 
         // add first element
         let comm = values

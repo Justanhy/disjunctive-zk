@@ -105,9 +105,9 @@ macro_rules! bench_scheme {
     ($b:expr, $n:tt, $s:tt) => {{
         let sk = Scalar::random(&mut OsRng);
         let mut pk: Vec<RistrettoPoint> = Vec::with_capacity(1 << $n);
-        pk.push(&sk * &RISTRETTO_BASEPOINT_TABLE);
+        pk.push(&sk * RISTRETTO_BASEPOINT_TABLE);
         for _ in 1..(1 << $n) {
-            pk.push(&Scalar::random(&mut OsRng) * &RISTRETTO_BASEPOINT_TABLE);
+            pk.push(&Scalar::random(&mut OsRng) * RISTRETTO_BASEPOINT_TABLE);
         }
         let (pk, sk) = compilen!($n, pk, sk);
         $b.iter(|| {

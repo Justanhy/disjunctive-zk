@@ -47,7 +47,7 @@ impl Stackable for Schnorr {
         _witness: &Self::Witness,
     ) -> (Self::State, Self::MessageA) {
         let state = Scalar::random(rng);
-        let message = &state * &RISTRETTO_BASEPOINT_TABLE;
+        let message = &state * RISTRETTO_BASEPOINT_TABLE;
         (state, message.compress())
     }
 
@@ -58,7 +58,7 @@ impl Stackable for Schnorr {
         challenge: &Self::Challenge,
     ) -> (Self::Precompute, Self::MessageZ) {
         let z = challenge * witness + state;
-        let p = &z * &RISTRETTO_BASEPOINT_TABLE;
+        let p = &z * RISTRETTO_BASEPOINT_TABLE;
         let cinv = -challenge;
         ((p, cinv), z)
     }

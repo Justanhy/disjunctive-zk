@@ -107,8 +107,8 @@ impl HalfBinding {
     }
     /// Generate public parameters for the commitment scheme
     pub fn setup<R: CryptoRngCore>(rng: &mut R) -> PublicParams {
-        let h = &Scalar::random(rng) * &RISTRETTO_BASEPOINT_TABLE;
-        let g0 = &RISTRETTO_BASEPOINT_TABLE
+        let h = &Scalar::random(rng) * RISTRETTO_BASEPOINT_TABLE;
+        let g0 = RISTRETTO_BASEPOINT_TABLE
             * &Scalar::random(&mut ChaCha20Rng::from_entropy());
         PublicParams(
             RistrettoBasepointTable::create(&g0),
@@ -167,11 +167,11 @@ impl HalfBinding {
         binding_side: Side,
     ) -> (PublicParams, CommitKey, EquivKey) {
         let h = RistrettoBasepointTable::create(
-            &(&Scalar::random(rng) * &RISTRETTO_BASEPOINT_TABLE),
+            &(&Scalar::random(rng) * RISTRETTO_BASEPOINT_TABLE),
         );
         let g0 = RistrettoBasepointTable::create(
             &(&Scalar::random(&mut ChaCha20Rng::from_entropy())
-                * &RISTRETTO_BASEPOINT_TABLE),
+                * RISTRETTO_BASEPOINT_TABLE),
         );
         let pp = PublicParams(g0, h);
         let (ck, ek) = Self::gen(&pp, binding_side);

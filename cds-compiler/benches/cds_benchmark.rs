@@ -133,10 +133,15 @@ impl fmt::Display for VerifierBenchParam {
 }
 
 pub fn cds94_benchmark(c: &mut Criterion) {
-    let ns: [usize; 8] = [2, 4, 8, 16, 32, 64, 128, 255];
+    const N: usize = 8;
+    let ns: [usize; N] = [2, 4, 8, 16, 32, 64, 128, 255];
+    let mut communication_size: [usize; N] = [0; N];
 
     let mut group = c.benchmark_group("cds94_benchmark");
-    for n in ns.into_iter() {
+    for (index, n) in ns
+        .into_iter()
+        .enumerate()
+    {
         let (
             protocol,
             cdsprover,
@@ -157,7 +162,7 @@ pub fn cds94_benchmark(c: &mut Criterion) {
             active_clauses,
             challenge,
         );
-        group.throughput(Throughput::Elements(n as u64));
+        group.throughput(Throughput::Bytes((n * 32 + n * 64 + 32) as u64));
         group.measurement_time(Duration::from_secs(10));
         group.bench_with_input(
             BenchmarkId::new("prover_bench", &proverparams),
@@ -184,6 +189,14 @@ pub fn cds94_benchmark(c: &mut Criterion) {
             &v_params,
             |b, s| b.iter(|| verifier(s)),
         );
+    }
+    group.finish();
+    let mut group = c.benchmark_group("cds94_communication");
+    for (index, n) in ns
+        .into_iter()
+        .enumerate()
+    {
+        group.throughput(Throughput::Bytes(communication_size[index] as u64));
     }
     group.finish();
 }

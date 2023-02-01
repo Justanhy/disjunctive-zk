@@ -1,13 +1,15 @@
 //! This module defines traits related to Sigma protocols
-use crate::*;
+use rand_core::CryptoRngCore;
 
 /// Trait for Sigma protocols
 ///
-/// This trait defines the methods that a general sigma protocol should have
+/// This trait defines the methods that a general sigma
+/// protocol should have
 pub trait SigmaProtocol {
-    /// Public key of the protocol
+    /// Public information of the protocol
     type Statement;
-    /// Private key of the protocol
+    /// Private information of the protocol. Should only be
+    /// known by the Prover
     type Witness;
 
     /// First round message
@@ -17,14 +19,19 @@ pub trait SigmaProtocol {
     /// Third round message
     type MessageZ;
 
-    /// On every protocol execution (i.e. interaction between the prover and the verifier)
-    /// there is a particular *state* for that execution. This *state* contains contextual information for the
-    /// protocol that may be used (usually by the prover in the third round).
+    /// On every protocol execution (i.e. interaction
+    /// between the prover and the verifier) there is a
+    /// particular *state* for that execution. This *state*
+    /// contains contextual information for the protocol
+    /// that may be used (usually by the prover in the third
+    /// round).
     type State;
-    /// Contextual information that is private to the prover but required by the protocol.
+    /// Contextual information that is private to the prover
+    /// but required by the protocol.
     type ProverContext;
 
-    /// The first message in a Sigma protocol (sent by the Prover).
+    /// The first message in a Sigma protocol (sent by the
+    /// Prover).
     fn first<R: CryptoRngCore>(
         statement: &Self::Statement,
         witness: &Self::Witness,
@@ -34,14 +41,17 @@ pub trait SigmaProtocol {
     where
         Self: Sized;
 
-    /// The second message in a Sigma protocol (sent by the Verifier).
+    /// The second message in a Sigma protocol (sent by the
+    /// Verifier).
     ///
-    /// Usually, this is a challenge sent by the Verifier to the Prover.
+    /// Usually, this is a challenge sent by the Verifier to
+    /// the Prover.
     fn second<R: CryptoRngCore>(verifier_rng: &mut R) -> Self::Challenge
     where
         Self: Sized;
 
-    /// The third message in a Sigma protocol (sent by the Prover).
+    /// The third message in a Sigma protocol (sent by the
+    /// Prover).
     fn third<R: CryptoRngCore>(
         statement: &Self::Statement,
         state: &Self::State,
@@ -56,16 +66,19 @@ pub trait SigmaProtocol {
     /// The verification method used by the Verifier
     ///
     /// **Parameters**
-    /// - `statement` contextual information about the statement to prove
+    /// - `statement` contextual information about the
+    ///   statement to prove
     /// - `a` the first message, sent by the prover
     /// - `c` the second message, sent by the verifier
     /// - `z` the third message, sent by the prover
     ///
-    /// Given these parameters, the verifier can verify if the conversation/transcript
-    /// between the verifier and prover is consistent with the statement.
+    /// Given these parameters, the verifier can verify if
+    /// the conversation/transcript between the verifier
+    /// and prover is consistent with the statement.
     ///
     /// **Returns**
-    /// - `true` if the transcript is consistent with the statement
+    /// - `true` if the transcript is consistent with the
+    ///   statement
     /// - `false` otherwise
     fn verify(
         statement: &Self::Statement,
@@ -80,11 +93,15 @@ pub trait SigmaProtocol {
 /// Trait for the transcripts in Sigma protocols
 ///
 /// **Trait Types**
-/// - `MessageA` Type of the first message (the commitment of the Prover)
-/// - `Challenge` Type of the second message (sent by the Verifier)
-/// - `MessageZ` Type of the third message (sent by the Prover which the Verifier uses to validate the prover)
+/// - `MessageA` Type of the first message (the commitment
+///   of the Prover)
+/// - `Challenge` Type of the second message (sent by the
+///   Verifier)
+/// - `MessageZ` Type of the third message (sent by the
+///   Prover which the Verifier uses to validate the prover)
 ///
-/// These are generic types that the Sigma protocol concrete implementation will define
+/// These are generic types that the Sigma protocol concrete
+/// implementation will define
 pub trait SigmaTranscript {
     /// Commitment (First round message)
     type MessageA;

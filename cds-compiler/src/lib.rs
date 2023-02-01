@@ -6,27 +6,25 @@ pub extern crate shamir_ss;
 pub extern crate sigmazk;
 pub mod compiler;
 
-use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 
 pub use compiler::*;
 use itertools::{izip, Itertools};
 use rand_chacha::ChaCha20Rng;
 use rand_core::{CryptoRngCore, SeedableRng};
-use shamir_ss::{
-    vsss_rs::curve25519::WrappedScalar, Shamir, Share, WithShares,
-};
+use shamir_ss::vsss_rs::curve25519::WrappedScalar;
+use shamir_ss::{Shamir, Share, WithShares};
 use sigmazk::{
-    error::Error as SchnorrError, Schnorr, SchnorrProver, SchnorrTranscript,
-    SchnorrVerifier, SigmaProtocol, SigmaProver, SigmaTranscript,
-    SigmaVerifier,
+    Schnorr, SchnorrProver, SchnorrTranscript, SchnorrVerifier, SigmaProtocol,
+    SigmaProver, SigmaTranscript, SigmaVerifier,
 };
-use std::{any::Any, fmt};
+use std::fmt;
 
 #[derive(Clone, Debug)]
 pub struct CDS94Prover {
     /// Needs to have index of active clauses
-    /// Needs to have list of witnesses for each active clause
+    /// Needs to have list of witnesses for each active
+    /// clause
     active_clauses: Vec<bool>,
     witnesses: Vec<Scalar>,
     prover_rng: ChaCha20Rng,
@@ -107,7 +105,8 @@ pub mod tests {
         let actual_witnesses: Vec<Scalar> = (0..N)
             .map(m)
             .collect();
-        // generate the prover's witnesses - for inactive clauses the prover generates a random witness
+        // generate the prover's witnesses - for inactive clauses
+        // the prover generates a random witness
         let provers_witnesses: Vec<Scalar> = actual_witnesses
             .to_owned()
             .iter()
@@ -205,7 +204,7 @@ pub mod tests {
     }
 
     #[test]
-    fn second_message_works() {
+    fn third_message_works() {
         const N: usize = 2;
         const D: usize = 1;
         let (

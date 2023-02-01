@@ -1,10 +1,10 @@
 use rand_core::{CryptoRng, RngCore};
 use sigmazk::{EHVzk, SigmaProtocol};
 
-use std::{fmt::Debug, io::Write};
+use std::fmt::Debug;
+use std::io::Write;
 
-// Trait for messages exchanged in a Stacakble protocol
-pub trait Message: Debug {
+pub trait Message: Debug + Default {
     fn write<W: Write>(&self, writer: &mut W);
 
     fn size(&self) -> usize {
@@ -14,8 +14,7 @@ pub trait Message: Debug {
     }
 }
 
-// Implementation of Message for [u8]
-impl Message for [u8] {
+impl Message for &[u8] {
     fn write<W: Write>(&self, writer: &mut W) {
         writer
             .write_all(self)
@@ -27,10 +26,44 @@ pub trait Challenge {
     fn new(bytes: &[u8; 64]) -> Self;
 }
 
-pub trait Stackable: SigmaProtocol + EHVzk {
-    type A: Message;
-    type C: Challenge;
-    type Z: Message;
-
+pub trait Stackable:
+    SigmaProtocol<MessageA: Message, MessageZ: Message, Challenge: Challenge>
+    + EHVzk
+{
     const CLAUSES: usize = 1;
 }
+// pub trait Stackable {
+//     type State;
+//     type Witness;
+//     type Statement;
+
+//     type MessageA: Message;
+//     type MessageZ: Message;
+//     type Challenge: Challenge;
+
+//     type Precompute;
+
+//     const CLAUSES: usize = 1;
+
+//     // produce a first round message
+//     fn sigma_a<R: RngCore + CryptoRng>(
+//         rng: &mut R,
+//         witness: &Self::Witness,
+//     ) -> (Self::State, Self::MessageA);
+
+//     // produce a third round message
+//     fn sigma_z(
+//         statement: &Self::Statement,
+//         witness: &Self::Witness,
+//         state: &Self::State,
+//         challenge: &Self::Challenge,
+//     ) -> (Self::Precompute, Self::MessageZ);
+
+//     // simulator
+//     fn ehvzk(
+//         precom: &Self::Precompute,
+//         statement: &Self::Statement,
+//         challenge: &Self::Challenge,
+//         z: &Self::MessageZ,
+//     ) -> Self::MessageA;
+// }

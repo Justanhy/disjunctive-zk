@@ -4,13 +4,10 @@ use std::time::Duration;
 
 use cds_compiler::*;
 use criterion::{
-    criterion_group, criterion_main, Bencher, BenchmarkId, Criterion,
-    Throughput,
+    criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
 };
-use curve25519_dalek::{
-    ristretto::{CompressedRistretto, RistrettoPoint},
-    scalar::Scalar,
-};
+use curve25519_dalek::ristretto::CompressedRistretto;
+use curve25519_dalek::scalar::Scalar;
 use rand_chacha::ChaCha20Rng;
 use rand_core::SeedableRng;
 use sigmazk::*;
@@ -24,7 +21,8 @@ fn bench_init(n: usize, d: usize) -> CDS94Test {
     let actual_witnesses: Vec<Scalar> = (0..n)
         .map(m)
         .collect();
-    // generate the prover's witnesses - for inactive clauses the prover generates a random witness
+    // generate the prover's witnesses - for inactive clauses
+    // the prover generates a random witness
     let provers_witnesses: Vec<Scalar> = actual_witnesses
         .to_owned()
         .iter()
@@ -103,7 +101,8 @@ fn prover(
 struct ProverBenchParam(CDS94, CDS94Prover, Vec<bool>, Scalar);
 
 impl fmt::Display for ProverBenchParam {
-    /// Implementation of Display for the Benchmark parameters given to the CDS94 prover
+    /// Implementation of Display for the Benchmark
+    /// parameters given to the CDS94 prover
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -126,7 +125,8 @@ struct VerifierBenchParam(
 );
 
 impl fmt::Display for VerifierBenchParam {
-    /// Implementation of Display for the Benchmark parameters given to the CDS94 Verifier
+    /// Implementation of Display for the Benchmark
+    /// parameters given to the CDS94 Verifier
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -135,10 +135,10 @@ impl fmt::Display for VerifierBenchParam {
 pub fn cds94_benchmark(c: &mut Criterion) {
     const N: usize = 8;
     let ns: [usize; N] = [2, 4, 8, 16, 32, 64, 128, 255];
-    let mut communication_size: [usize; N] = [0; N];
+    let communication_size: [usize; N] = [0; N];
 
     let mut group = c.benchmark_group("cds94_benchmark");
-    for (index, n) in ns
+    for (_index, n) in ns
         .into_iter()
         .enumerate()
     {
@@ -192,7 +192,7 @@ pub fn cds94_benchmark(c: &mut Criterion) {
     }
     group.finish();
     let mut group = c.benchmark_group("cds94_communication");
-    for (index, n) in ns
+    for (index, _n) in ns
         .into_iter()
         .enumerate()
     {

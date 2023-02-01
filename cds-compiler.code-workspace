@@ -7,6 +7,6 @@
   "settings": {
     "editor.fontFamily": "Fira Code, Consolas, 'Courier New', monospace",
     "window.zoomLevel": 0,
-    "sshfs.configs": []
+    "editor.tabSize": 4
   }
 }

@@ -1,4 +1,6 @@
-use crate::comm::{CommitKey, Commitment, Randomness, Trapdoor};
+use crate::commitment_scheme::rot256::{
+    CommitKey, Commitment, Randomness, Trapdoor,
+};
 use crate::stack::*;
 use crate::Side;
 

@@ -1,9 +1,9 @@
 //! Implementation of 1-of-2 partial-binding vector
 //! commitment scheme from discrete log
 
+use core::fmt;
 use std::io::Write;
 
-use curve25519_dalek::constants::RISTRETTO_BASEPOINT_TABLE;
 use curve25519_dalek::ristretto::{
     CompressedRistretto, RistrettoBasepointTable, RistrettoPoint,
 };
@@ -11,7 +11,7 @@ use curve25519_dalek::scalar::Scalar;
 use rand_chacha::ChaCha20Rng;
 use rand_core::{CryptoRngCore, SeedableRng};
 
-use crate::stack::Message;
+use crate::stackable::Message;
 use crate::util::hash;
 
 /// 1 out of 2 commitment scheme
@@ -36,8 +36,53 @@ impl Side {
 #[derive(Clone)]
 pub struct PublicParams(RistrettoBasepointTable, RistrettoBasepointTable);
 
-#[derive(Copy, Clone, Debug, PartialEq, Hash)]
+impl fmt::Debug for PublicParams {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PublicParams")
+            .field(
+                "g0 precomputed table with basepoint",
+                &self
+                    .0
+                    .basepoint(),
+            )
+            .field(
+                "h precomputed table with basepoint",
+                &self
+                    .1
+                    .basepoint(),
+            )
+            .finish()
+    }
+}
+
+// impl Default for PublicParams {
+//     fn default() -> Self {
+//         PublicParams(
+//
+// RistrettoBasepointTable::create(&RistrettoPoint::random(
+//                 &mut ChaCha20Rng::from_entropy(),
+//             )),
+//
+// RistrettoBasepointTable::create(&RistrettoPoint::random(
+//                 &mut ChaCha20Rng::from_entropy(),
+//             )),
+//         )
+//     }
+// }
+
+#[derive(Copy, Clone, Debug, PartialEq, Hash, Default)]
 pub struct CommitKey(CompressedRistretto);
+
+impl Message for CommitKey {
+    fn write<W: Write>(&self, writer: &mut W) {
+        writer
+            .write_all(
+                self.0
+                    .as_bytes(),
+            )
+            .unwrap();
+    }
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Hash)]
 pub struct Commitment(pub [u8; 32], pub [u8; 32]);
@@ -62,22 +107,28 @@ impl Message for Commitment {
 #[derive(Clone, Debug, PartialEq, Hash)]
 pub struct EquivKey {
     binding_side: Side,
-    equiv_scalar: Scalar,
+    trapdoor: Scalar,
     pub commit_key: CommitKey,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
 pub struct Randomness(pub Scalar, pub Scalar);
 
+impl Randomness {
+    pub fn random<R: CryptoRngCore>(rng: &mut R) -> Self {
+        Self(Scalar::random(rng), Scalar::random(rng))
+    }
+}
+
 impl EquivKey {
     pub fn new(
         binding_side: Side,
-        equiv_scalar: Scalar,
+        trapdoor: Scalar,
         commit_key: CommitKey,
     ) -> Self {
         Self {
             binding_side,
-            equiv_scalar,
+            trapdoor,
             commit_key,
         }
     }
@@ -110,12 +161,11 @@ impl HalfBinding {
     }
     /// Generate public parameters for the commitment scheme
     pub fn setup<R: CryptoRngCore>(rng: &mut R) -> PublicParams {
-        let h = &Scalar::random(rng) * RISTRETTO_BASEPOINT_TABLE;
-        let g0 = RISTRETTO_BASEPOINT_TABLE
-            * &Scalar::random(&mut ChaCha20Rng::from_entropy());
+        let h = &RistrettoPoint::random(rng);
+        let g0 = &RistrettoPoint::random(rng);
         PublicParams(
-            RistrettoBasepointTable::create(&g0),
-            RistrettoBasepointTable::create(&h),
+            RistrettoBasepointTable::create(g0),
+            RistrettoBasepointTable::create(h),
         )
     }
 
@@ -125,32 +175,36 @@ impl HalfBinding {
     /// `pp`: Public parameters
     ///
     /// `side`: Binding side
-    pub fn gen(pp: &PublicParams, binding_side: Side) -> (CommitKey, EquivKey) {
+    pub fn gen<R: CryptoRngCore>(
+        pp: &PublicParams,
+        binding_side: Side,
+        rng: &mut R,
+    ) -> (CommitKey, EquivKey) {
         let PublicParams(g0, h) = pp;
-        let equiv_scalar = Scalar::random(&mut ChaCha20Rng::from_entropy());
+        let trapdoor = Scalar::random(rng);
         match binding_side {
             Side::One => {
-                let g2 = h * &equiv_scalar;
+                let g2 = h * &trapdoor;
                 let g1 = Self::g1_from_g2(&g2, g0);
                 let commit_key = CommitKey(g1.compress());
                 (
                     commit_key,
                     EquivKey {
                         binding_side,
-                        equiv_scalar,
+                        trapdoor,
                         commit_key,
                     },
                 )
             }
             Side::Two => {
-                let g1 = h * &equiv_scalar;
+                let g1 = h * &trapdoor;
                 // let g2 = &g1 + g0.basepoint();
                 let commit_key = CommitKey(g1.compress());
                 (
                     commit_key,
                     EquivKey {
                         binding_side,
-                        equiv_scalar,
+                        trapdoor,
                         commit_key,
                     },
                 )
@@ -167,15 +221,14 @@ impl HalfBinding {
         rng: &mut R,
         binding_side: Side,
     ) -> (PublicParams, CommitKey, EquivKey) {
-        let h = RistrettoBasepointTable::create(
-            &(&Scalar::random(rng) * RISTRETTO_BASEPOINT_TABLE),
-        );
-        let g0 = RistrettoBasepointTable::create(
-            &(&Scalar::random(&mut ChaCha20Rng::from_entropy())
-                * RISTRETTO_BASEPOINT_TABLE),
-        );
+        let h = RistrettoBasepointTable::create(&RistrettoPoint::random(
+            &mut ChaCha20Rng::from_entropy(),
+        ));
+        let g0 = RistrettoBasepointTable::create(&RistrettoPoint::random(
+            &mut ChaCha20Rng::from_entropy(),
+        ));
         let pp = PublicParams(g0, h);
-        let (ck, ek) = Self::gen(&pp, binding_side);
+        let (ck, ek) = Self::gen(&pp, binding_side, rng);
         (pp, ck, ek)
     }
 
@@ -215,20 +268,6 @@ impl HalfBinding {
         let comm2 = Self::commitment(&g2, h, m2, &r2);
         Commitment(*comm1.as_bytes(), *comm2.as_bytes())
     }
-
-    // / Commit to a message in it's binding side
-    // pub fn commit<M: Message>(
-    //     pp: &PublicParams,
-    //     ek: &EquivKey,
-    //     msg: (&M, &M),
-    // ) -> (Commitment, Randomness) {
-    //     let EquivKey { commit_key, .. } = ek;
-    //     let r = Randomness(
-    //         Scalar::random(&mut ChaCha20Rng::from_entropy()),
-    //         Scalar::random(&mut ChaCha20Rng::from_entropy()),
-    //     );
-    //     (Self::bind(pp, *commit_key, msg, r), r)
-    // }
 
     /// Commit with access to the equivocation key. The
     /// difference between this and `bind` is that this
@@ -298,7 +337,7 @@ impl HalfBinding {
     ) -> Randomness {
         let EquivKey {
             binding_side,
-            equiv_scalar,
+            trapdoor,
             ..
         } = ek;
         let Randomness(r1, r2) = old_aux;
@@ -311,14 +350,14 @@ impl HalfBinding {
                 let old2 = hash(old.1);
                 let new_equiv = hash(new.1);
                 let delta = &new_equiv - &old2;
-                Randomness(r1, r2 - equiv_scalar * delta)
+                Randomness(r1, r2 - trapdoor * delta)
             }
             Side::Two => {
                 // equiv side is left
                 let old1 = hash(old.0);
                 let new_equiv = hash(new.0);
                 let delta = &new_equiv - &old1;
-                Randomness(r1 - equiv_scalar * delta, r2)
+                Randomness(r1 - trapdoor * delta, r2)
             }
         }
     }
@@ -365,28 +404,49 @@ mod tests {
     }
 
     #[test]
-    fn test_half_binding() {
+    fn test_half_binding_works() {
         let rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
-        let aux = Randomness(
-            Scalar::random(&mut ChaCha20Rng::from_seed([1u8; 32])),
-            Scalar::random(&mut ChaCha20Rng::from_seed([2u8; 32])),
-        );
+        let aux = Randomness::random(rng);
         let msg = "hello world";
         let msg2 = "goodbye world";
         let m = (&msg.as_bytes(), &<&[u8]>::default());
         let m_equiv = (&msg.as_bytes(), &msg2.as_bytes());
         let pp = HalfBinding::setup(rng);
-        let (ck, ek) = HalfBinding::gen(&pp, Side::One);
+        let (ck, ek) = HalfBinding::gen(&pp, Side::One, rng);
 
         let (comm_equivcom, aux_old) =
             HalfBinding::equivcom(&pp, &ek, m, Some(aux));
-        // let comm_old_bind = HalfBinding::bind(&pp, ck, m,
-        // aux_old); assert_eq!(comm_old, comm_old_bind);
-
         let aux_new = HalfBinding::equiv(&ek, m, m_equiv, aux_old);
-        // let (comm_equivcom, _) = HalfBinding::equivcom(&pp, &ek,
-        // m_equiv, Some(aux_new));
         let comm_bind = HalfBinding::bind(&pp, ck, m_equiv, aux_new);
         assert_eq!(comm_equivcom, comm_bind);
+    }
+
+    #[test]
+    fn test_half_binding_fails() {
+        let rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
+        let aux = Randomness::random(rng);
+        let msg = "hello world";
+        let msg2 = "goodbye world";
+        let m = (&msg.as_bytes(), &<&[u8]>::default());
+        let m_equiv = (&msg.as_bytes(), &msg2.as_bytes());
+        let pp = HalfBinding::setup(rng);
+        let (ck, ek) = HalfBinding::gen(&pp, Side::One, rng);
+
+        let (comm1, aux1) = HalfBinding::equivcom(&pp, &ek, m, Some(aux));
+
+        let (comm2, aux2) = HalfBinding::equivcom(&pp, &ek, m_equiv, Some(aux));
+
+        assert_ne!(comm1, comm2); // TODO: Check if this is supposed to be indistinguishable
+
+        let aux1_new = HalfBinding::equiv(&ek, m, m_equiv, aux1);
+        let aux2_new = HalfBinding::equiv(&ek, m_equiv, m, aux2);
+
+        let comm1_bind = HalfBinding::bind(&pp, ck, m_equiv, aux1_new);
+        let comm2_bind = HalfBinding::bind(&pp, ck, m, aux2_new);
+
+        assert_ne!(comm1_bind, comm2_bind);
+
+        assert_eq!(comm1, comm1_bind);
+        assert_eq!(comm2, comm2_bind);
     }
 }

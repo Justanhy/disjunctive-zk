@@ -1,15 +1,16 @@
-#![feature(associated_type_defaults)]
+// #![feature(associated_type_defaults)]
+#![feature(associated_type_bounds)]
 // #![feature(test)]
 
 // extern crate test;
 
-mod comm;
 pub mod commitment_scheme;
 pub mod compiler;
 pub mod fiat;
 pub mod schnorr;
 mod stack;
 pub mod stackable;
+pub mod stacker;
 mod util;
 
 // use compiler::*;

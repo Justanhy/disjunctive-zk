@@ -160,8 +160,10 @@ impl ZeroKnowledge for Schnorr {
             proof,
             challenge,
         } = args;
-        let commitment =
-            Some((&RISTRETTO_BASEPOINT_TABLE * &proof - challenge * pub_key).compress());
+        let commitment = Some(
+            (&RISTRETTO_BASEPOINT_TABLE * &proof - challenge * pub_key)
+                .compress(),
+        );
         SchnorrTranscript {
             commitment,
             challenge: Some(challenge),

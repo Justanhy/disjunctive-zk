@@ -1,12 +1,11 @@
 //! Implementation of 1-of-2^q partially-binding vector
 //! commitment from discrete log using halfbinding comitment
 //! schemes
-
-use std::default;
+use std::io::Write;
 
 use rand_core::CryptoRngCore;
 
-use crate::stack::Message;
+use crate::stackable::Message;
 
 use super::halfbinding::{Commitment, HalfBinding, Side};
 
@@ -20,15 +19,25 @@ pub enum BindingIndex {
     Four,
 }
 
+#[derive(Clone, Debug)]
 pub struct PublicParams {
     pub inner: super::halfbinding::PublicParams,
     pub outer: super::halfbinding::PublicParams,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Hash, Default)]
 pub struct CommitKey {
     pub inner_ck: super::halfbinding::CommitKey,
     pub outer_ck: super::halfbinding::CommitKey,
+}
+
+impl Message for CommitKey {
+    fn write<W: Write>(&self, writer: &mut W) {
+        self.inner_ck
+            .write(writer);
+        self.outer_ck
+            .write(writer);
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Hash)]
@@ -37,11 +46,44 @@ pub struct Randomness {
     pub outer: super::halfbinding::Randomness,
 }
 
+impl Randomness {
+    pub fn random<R: CryptoRngCore>(rng: &mut R) -> Self {
+        Randomness {
+            inner: super::halfbinding::Randomness::random(rng),
+            outer: super::halfbinding::Randomness::random(rng),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Hash)]
 pub struct EquivKey {
     pub inner_ek: super::halfbinding::EquivKey,
     pub outer_ek: super::halfbinding::EquivKey,
-    pub binding_info: (BindingIndex, Side, Side),
+    pub binding_index: BindingIndex,
+}
+
+impl EquivKey {
+    pub fn get_inner_outer(&self) -> (Side, Side) {
+        match self.binding_index {
+            // According to the formula in the paper
+            // ia = i mod la and ib = floor(i / la)
+            // in our case la = 2
+            BindingIndex::One => (Side::One, Side::One),
+            BindingIndex::Two => (Side::Two, Side::One),
+            BindingIndex::Three => (Side::One, Side::Two),
+            BindingIndex::Four => (Side::Two, Side::Two),
+        }
+    }
+
+    pub fn get_inner(&self) -> Side {
+        self.get_inner_outer()
+            .0
+    }
+
+    pub fn get_outer(&self) -> Side {
+        self.get_inner_outer()
+            .1
+    }
 }
 
 /// Implementation of 1-of-2^2 partially-binding vector
@@ -59,9 +101,10 @@ impl QBinding {
     }
 
     /// Generate commitment key and equivocation key
-    pub fn gen(
+    pub fn gen<R: CryptoRngCore>(
         pp: &PublicParams,
         binding_index: BindingIndex,
+        rng: &mut R,
     ) -> (CommitKey, EquivKey) {
         let (inner_side, outer_side) = match binding_index {
             // According to the formula in the paper
@@ -72,14 +115,14 @@ impl QBinding {
             BindingIndex::Three => (Side::One, Side::Two),
             BindingIndex::Four => (Side::Two, Side::Two),
         };
-        let (inner_ck, inner_ek) = HalfBinding::gen(&pp.inner, inner_side);
-        let (outer_ck, outer_ek) = HalfBinding::gen(&pp.outer, outer_side);
+        let (inner_ck, inner_ek) = HalfBinding::gen(&pp.inner, inner_side, rng);
+        let (outer_ck, outer_ek) = HalfBinding::gen(&pp.outer, outer_side, rng);
         (
             CommitKey { inner_ck, outer_ck },
             EquivKey {
                 inner_ek,
                 outer_ek,
-                binding_info: (binding_index, inner_side, outer_side),
+                binding_index,
             },
         )
     }
@@ -89,7 +132,7 @@ impl QBinding {
         binding_index: BindingIndex,
     ) -> (PublicParams, CommitKey, EquivKey) {
         let pp = Self::setup(rng);
-        let (ck, ek) = Self::gen(&pp, binding_index);
+        let (ck, ek) = Self::gen(&pp, binding_index, rng);
         (pp, ck, ek)
     }
 
@@ -112,7 +155,7 @@ impl QBinding {
         let EquivKey {
             inner_ek,
             outer_ek,
-            binding_info: (binding_index, inner_side, outer_side),
+            binding_index,
         } = ek;
         let (inner_rand, outer_rand) = match aux {
             Some(r) => {
@@ -125,22 +168,10 @@ impl QBinding {
         // A
         let mdefault = &M::default();
         let inner_vec = match binding_index {
-            BindingIndex::One => match inner_side {
-                Side::One => (msg.0, mdefault),
-                Side::Two => (mdefault, msg.0),
-            },
-            BindingIndex::Two => match inner_side {
-                Side::One => (msg.1, mdefault),
-                Side::Two => (mdefault, msg.1),
-            },
-            BindingIndex::Three => match inner_side {
-                Side::One => (msg.2, mdefault),
-                Side::Two => (mdefault, msg.2),
-            },
-            BindingIndex::Four => match inner_side {
-                Side::One => (msg.3, mdefault),
-                Side::Two => (mdefault, msg.3),
-            },
+            BindingIndex::One => (msg.0, mdefault),
+            BindingIndex::Two => (mdefault, msg.1),
+            BindingIndex::Three => (msg.2, mdefault),
+            BindingIndex::Four => (mdefault, msg.3),
         };
         // Commit to v_a
         let (inner_comm, inner_aux) =
@@ -149,7 +180,7 @@ impl QBinding {
         // B
         let mut outer_vec: (&Commitment, &Commitment) =
             (&Commitment::default(), &Commitment::default());
-        match outer_side {
+        match ek.get_outer() {
             Side::One => outer_vec.0 = &inner_comm,
             Side::Two => outer_vec.1 = &inner_comm,
         };
@@ -202,27 +233,16 @@ impl QBinding {
         let EquivKey {
             inner_ek,
             outer_ek,
-            binding_info: (binding_index, inner_side, outer_side),
+            binding_index,
         } = ek;
         let mdefault = &M::default();
         let inner_vec = match binding_index {
-            BindingIndex::One => match inner_side {
-                Side::One => (old.0, mdefault),
-                Side::Two => (mdefault, old.0),
-            },
-            BindingIndex::Two => match inner_side {
-                Side::One => (old.1, mdefault),
-                Side::Two => (mdefault, old.1),
-            },
-            BindingIndex::Three => match inner_side {
-                Side::One => (old.2, mdefault),
-                Side::Two => (mdefault, old.2),
-            },
-            BindingIndex::Four => match inner_side {
-                Side::One => (old.3, mdefault),
-                Side::Two => (mdefault, old.3),
-            },
+            BindingIndex::One => (old.0, mdefault),
+            BindingIndex::Two => (mdefault, old.1),
+            BindingIndex::Three => (old.2, mdefault),
+            BindingIndex::Four => (mdefault, old.3),
         };
+        let outer_side = &ek.get_outer();
         let inner_new = Self::inner_new(new, outer_side);
         let new_inner_aux =
             HalfBinding::equiv(inner_ek, inner_vec, inner_new, old_aux.inner);
@@ -279,27 +299,15 @@ impl QBinding {
 
 #[cfg(test)]
 mod tests {
-    use curve25519_dalek::scalar::Scalar;
     use rand_chacha::ChaCha20Rng;
     use rand_core::SeedableRng;
-
-    use crate::commitment_scheme::halfbinding;
 
     use super::*;
 
     #[test]
-    fn test_qbinding() {
+    fn test_qbinding_works() {
         let rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
-        let aux = Randomness {
-            inner: halfbinding::Randomness(
-                Scalar::random(&mut ChaCha20Rng::from_entropy()),
-                Scalar::random(&mut ChaCha20Rng::from_entropy()),
-            ),
-            outer: halfbinding::Randomness(
-                Scalar::random(&mut ChaCha20Rng::from_entropy()),
-                Scalar::random(&mut ChaCha20Rng::from_entropy()),
-            ),
-        };
+        let aux = Randomness::random(rng);
         let m1 = "hello".as_bytes();
         let m2 = "world".as_bytes();
         let m3 = "this is a test".as_bytes();
@@ -308,13 +316,36 @@ mod tests {
         let msg = (&none, &none, &m3, &none);
         let msg_equiv = (&m1, &m2, &m3, &m4);
         let pp = QBinding::setup(rng);
-        let (ck, ek) = QBinding::gen(&pp, BindingIndex::Three);
-        let (comm_equivcom, _) = QBinding::equivcom(&pp, &ek, msg, Some(aux));
-        // let comm_old_bind = QBinding::bind(&pp, ck, msg, aux);
-        // assert_eq!(comm_old, comm_old_bind);
+        let (ck, ek) = QBinding::gen(&pp, BindingIndex::Three, rng);
 
+        let (comm_equivcom, _) = QBinding::equivcom(&pp, &ek, msg, Some(aux));
         let aux_new = QBinding::equiv(&pp, &ek, msg, msg_equiv, aux);
         let comm_bind = QBinding::bind(&pp, ck, msg_equiv, aux_new);
         assert_eq!(comm_equivcom, comm_bind);
+    }
+
+    #[test]
+    fn test_qbinding_fails() {
+        let rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
+        let aux = Randomness::random(rng);
+        let m1 = "hello".as_bytes();
+        let m2 = "world".as_bytes();
+        let m3 = "this is a test".as_bytes();
+        let m4 = "can you hear me?".as_bytes();
+        let none = "".as_bytes();
+        let msg = (&m1, &m2, &none, &none);
+        let msg_equiv = (&m1, &m2, &m3, &m4);
+        let pp = QBinding::setup(rng);
+        let (ck, ek) = QBinding::gen(&pp, BindingIndex::Three, rng);
+
+        let (comm1, aux1) = QBinding::equivcom(&pp, &ek, msg, Some(aux));
+        let (comm2, aux2) = QBinding::equivcom(&pp, &ek, msg_equiv, Some(aux));
+
+        assert_ne!(comm1, comm2);
+
+        let comm1_bind = QBinding::bind(&pp, ck, msg_equiv, aux1);
+        let comm2_bind = QBinding::bind(&pp, ck, msg, aux2);
+
+        assert_ne!(comm1_bind, comm2_bind);
     }
 }

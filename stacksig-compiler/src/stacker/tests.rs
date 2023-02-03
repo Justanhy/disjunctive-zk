@@ -7,10 +7,11 @@ use crate::commitment_scheme::qbinding::{
     BindingIndex, PublicParams, QBinding,
 };
 use crate::stackable::schnorr::Schnorr;
+use crate::stackable::Stackable;
 
-use super::{StackedSigma, StackedStatement, StackedWitness};
+use super::{SelfStacker, StackedStatement, StackedWitness};
 
-type S2 = StackedSigma<Schnorr>;
+type S2 = SelfStacker<Schnorr>;
 
 #[allow(dead_code)]
 struct StackerTest {
@@ -90,3 +91,13 @@ fn third_message_works() {
         &message_z
     ));
 }
+
+// #[test]
+// fn selfstack_works() {
+//     let ss = SelfStacker::<>::selfstack(
+//         255,
+//         3,
+//         Schnorr::init(Scalar::from(1u8)),
+//     );
+//     <SelfStacker as Stackable>::CLAUSES == 255;
+// }

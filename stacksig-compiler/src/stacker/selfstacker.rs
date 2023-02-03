@@ -11,10 +11,41 @@ use crate::commitment_scheme::halfbinding::Commitment;
 use crate::commitment_scheme::qbinding::{
     BindingIndex, CommitKey, EquivKey, PublicParams, QBinding, Randomness,
 };
+use crate::stackable::schnorr::Schnorr;
 use crate::stackable::{Challenge, Message, Stackable};
 
 #[derive(Debug)]
-pub struct StackedSigma<S: Stackable>(PhantomData<S>);
+pub struct SelfStacker<S: Stackable>(PhantomData<S>);
+
+type S2 = SelfStacker<Schnorr>;
+type S4 = SelfStacker<S2>;
+type S8 = SelfStacker<S4>;
+type S16 = SelfStacker<S8>;
+type S32 = SelfStacker<S16>;
+type S64 = SelfStacker<S32>;
+type S128 = SelfStacker<S64>;
+type S256 = SelfStacker<S128>;
+type S512 = SelfStacker<S256>;
+type S1024 = SelfStacker<S512>;
+type S2048 = SelfStacker<S1024>;
+type S4096 = SelfStacker<S2048>;
+
+// macro_rules! selfstack {
+//     ($clauses:tt, $index:tt, $sigma:ty) => {
+//         (|| -> SelfStacker<T> {
+
+//         })
+//         let s = check_if_stackable::<$sigma>();
+
+//         SelfStacker<Schnorr>
+//     }
+// }
+
+// type TestMacro = selfstack!(1, 2, Schnorr);
+
+// type StackedSigma =
+//     selfstack!(number_of_clauses, binding_index,
+// StackableBaseType);
 
 pub struct StackedStatement<S: Stackable> {
     pp: PublicParams,
@@ -145,11 +176,11 @@ impl Message for StackedA {
     }
 }
 
-impl<S: Stackable> Stackable for StackedSigma<S> {
+impl<S: Stackable> Stackable for SelfStacker<S> {
     const CLAUSES: usize = S::CLAUSES * 2;
 }
 
-impl<S: Stackable> SigmaProtocol for StackedSigma<S> {
+impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
     type Statement = StackedStatement<S>;
     type Witness = StackedWitness<S>;
     type State = StackedState<S>;
@@ -332,7 +363,7 @@ impl<S: Stackable> SigmaProtocol for StackedSigma<S> {
     }
 }
 
-impl<S: Stackable> EHVzk for StackedSigma<S> {
+impl<S: Stackable> EHVzk for SelfStacker<S> {
     fn simulate(
         // precom: &S::Precompute,
         statement: &StackedStatement<S>,

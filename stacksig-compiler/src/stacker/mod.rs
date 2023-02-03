@@ -1,4 +1,4 @@
-pub mod stacker;
+pub mod selfstacker;
 #[cfg(test)]
 mod tests;
-pub use stacker::*;
+pub use selfstacker::*;

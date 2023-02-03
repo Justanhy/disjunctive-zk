@@ -55,86 +55,90 @@ pub enum Side {
 // pub type Sig2048 = fiat::SignatureScheme<S2048>;
 // pub type Sig4096 = fiat::SignatureScheme<S4096>;
 
-// macro_rules! compile {
-//     ($pks:expr, $sk:expr) => {{
-//         let sk = CompiledWitness::new($sk, Side::Left);
-// // for benchmarking the signer is always the left-most
-// key         let len = $pks.len() / 2;
-//         let mut pk: Vec<_> = Vec::with_capacity(len);
-//         let mut pks = $pks.into_iter();
-//         for _ in 0..len {
-//             let l = pks.next().unwrap();
-//             let r = pks.next().unwrap();
-//             pk.push(CompiledStatement::new(l, r));
-//         }
-//         (pk, sk)
-//     }};
-// }
+macro_rules! compile {
+    ($pks:expr, $sk:expr) => {{
+        let sk = CompiledWitness::new($sk, Side::Left);
+        // for benchmarking the signer is always the left-most key
+        let len = $pks.len() / 2;
+        let mut pk: Vec<_> = Vec::with_capacity(len);
+        let mut pks = $pks.into_iter();
+        for _ in 0..len {
+            let l = pks
+                .next()
+                .unwrap();
+            let r = pks
+                .next()
+                .unwrap();
+            pk.push(CompiledStatement::new(l, r));
+        }
+        (pk, sk)
+    }};
+}
 
-// macro_rules! compilen {
-//     (1, $pks:expr, $sk:expr) => {{
-//         compile!($pks, $sk)
-//     }};
-//     (2, $pks:expr, $sk:expr) => {{
-//         let (pk, sk) = compile!($pks, $sk);
-//         compilen!(1, pk, sk)
-//     }};
-//     (3, $pks:expr, $sk:expr) => {{
-//         let (pk, sk) = compile!($pks, $sk);
-//         compilen!(2, pk, sk)
-//     }};
-//     (4, $pks:expr, $sk:expr) => {{
-//         let (pk, sk) = compile!($pks, $sk);
-//         compilen!(3, pk, sk)
-//     }};
-//     (5, $pks:expr, $sk:expr) => {{
-//         let (pk, sk) = compile!($pks, $sk);
-//         compilen!(4, pk, sk)
-//     }};
-//     (6, $pks:expr, $sk:expr) => {{
-//         let (pk, sk) = compile!($pks, $sk);
-//         compilen!(5, pk, sk)
-//     }};
-//     (7, $pks:expr, $sk:expr) => {{
-//         let (pk, sk) = compile!($pks, $sk);
-//         compilen!(6, pk, sk)
-//     }};
-//     (8, $pks:expr, $sk:expr) => {{
-//         let (pk, sk) = compile!($pks, $sk);
-//         compilen!(7, pk, sk)
-//     }};
-//     (9, $pks:expr, $sk:expr) => {{
-//         let (pk, sk) = compile!($pks, $sk);
-//         compilen!(8, pk, sk)
-//     }};
-//     (10, $pks:expr, $sk:expr) => {{
-//         let (pk, sk) = compile!($pks, $sk);
-//         compilen!(9, pk, sk)
-//     }};
-//     (11, $pks:expr, $sk:expr) => {{
-//         let (pk, sk) = compile!($pks, $sk);
-//         compilen!(10, pk, sk)
-//     }};
-//     (12, $pks:expr, $sk:expr) => {{
-//         let (pk, sk) = compile!($pks, $sk);
-//         compilen!(11, pk, sk)
-//     }};
-// }
+macro_rules! compilen {
+    (1, $pks:expr, $sk:expr) => {{
+        compile!($pks, $sk)
+    }};
+    (2, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(1, pk, sk)
+    }};
+    (3, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(2, pk, sk)
+    }};
+    (4, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(3, pk, sk)
+    }};
+    (5, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(4, pk, sk)
+    }};
+    (6, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(5, pk, sk)
+    }};
+    (7, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(6, pk, sk)
+    }};
+    (8, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(7, pk, sk)
+    }};
+    (9, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(8, pk, sk)
+    }};
+    (10, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(9, pk, sk)
+    }};
+    (11, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(10, pk, sk)
+    }};
+    (12, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(11, pk, sk)
+    }};
+}
 
-// macro_rules! bench_scheme {
-//     ($b:expr, $n:tt, $s:tt) => {{
-//         let sk = Scalar::random(&mut OsRng);
-//         let mut pk: Vec<RistrettoPoint> =
-// Vec::with_capacity(1 << $n);         pk.push(&sk *
-// &RISTRETTO_BASEPOINT_TABLE);         for _ in 1..(1 <<
-// $n) {             pk.push(&Scalar::random(&mut OsRng) *
-// &RISTRETTO_BASEPOINT_TABLE);         }
-//         let (pk, sk) = compilen!($n, pk, sk);
-//         $b.iter(|| {
-//             let _sig = $s::sign(&mut OsRng, &sk, &pk[0],
-// &[]);         });
-//     }};
-// }
+macro_rules! bench_scheme {
+    ($b:expr, $n:tt, $s:tt) => {{
+        let sk = Scalar::random(&mut OsRng);
+        let mut pk: Vec<RistrettoPoint> = Vec::with_capacity(1 << $n);
+        pk.push(&sk * &RISTRETTO_BASEPOINT_TABLE);
+        for _ in 1..(1 << $n) {
+            pk.push(&Scalar::random(&mut OsRng) * &RISTRETTO_BASEPOINT_TABLE);
+        }
+        let (pk, sk) = compilen!($n, pk, sk);
+        $b.iter(|| {
+            let _sig = $s::sign(&mut OsRng, &sk, &pk[0], &[]);
+        });
+    }};
+}
 
 // #[bench]
 // fn bench_sig2(b: &mut Bencher) {

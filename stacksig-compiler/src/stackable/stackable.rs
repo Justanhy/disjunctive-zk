@@ -1,4 +1,4 @@
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRngCore;
 use sigmazk::{EHVzk, SigmaProtocol};
 
 use std::fmt::Debug;
@@ -26,44 +26,17 @@ pub trait Challenge {
     fn new(bytes: &[u8; 64]) -> Self;
 }
 
+pub trait Randomizable {
+    fn randomize<R: CryptoRngCore>(&mut self, rng: &mut R);
+}
+
 pub trait Stackable:
-    SigmaProtocol<MessageA: Message, MessageZ: Message, Challenge: Challenge>
-    + EHVzk
+    SigmaProtocol<
+        Statement: Randomizable,
+        MessageA: Message,
+        MessageZ: Message,
+        Challenge: Challenge,
+    > + EHVzk
 {
     const CLAUSES: usize = 1;
 }
-// pub trait Stackable {
-//     type State;
-//     type Witness;
-//     type Statement;
-
-//     type MessageA: Message;
-//     type MessageZ: Message;
-//     type Challenge: Challenge;
-
-//     type Precompute;
-
-//     const CLAUSES: usize = 1;
-
-//     // produce a first round message
-//     fn sigma_a<R: RngCore + CryptoRng>(
-//         rng: &mut R,
-//         witness: &Self::Witness,
-//     ) -> (Self::State, Self::MessageA);
-
-//     // produce a third round message
-//     fn sigma_z(
-//         statement: &Self::Statement,
-//         witness: &Self::Witness,
-//         state: &Self::State,
-//         challenge: &Self::Challenge,
-//     ) -> (Self::Precompute, Self::MessageZ);
-
-//     // simulator
-//     fn ehvzk(
-//         precom: &Self::Precompute,
-//         statement: &Self::Statement,
-//         challenge: &Self::Challenge,
-//         z: &Self::MessageZ,
-//     ) -> Self::MessageA;
-// }

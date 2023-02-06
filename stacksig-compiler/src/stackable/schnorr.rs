@@ -15,7 +15,7 @@ use sigmazk::{
 
 use super::stackable::Stackable;
 
-use super::{Challenge, Message};
+use super::{Challenge, Message, Randomizable};
 
 /// Transcript for the Schnorr protocol
 #[derive(Debug, Clone, Copy, Default)]
@@ -218,6 +218,12 @@ impl Message for Scalar {
 impl Challenge for Scalar {
     fn new(bytes: &[u8; 64]) -> Self {
         Scalar::from_bytes_mod_order_wide(bytes)
+    }
+}
+
+impl Randomizable for Schnorr {
+    fn randomize<R: CryptoRngCore>(&mut self, rng: &mut R) {
+        self.pub_key = self.pub_key * Scalar::random(rng);
     }
 }
 

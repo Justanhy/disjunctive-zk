@@ -7,45 +7,38 @@ use rand_chacha::ChaCha20Rng;
 use rand_core::CryptoRngCore;
 use sigmazk::{EHVzk, SigmaProtocol};
 
+use crate::commitment_scheme::comm::PartialBindingCommScheme;
 use crate::commitment_scheme::halfbinding::Commitment;
 use crate::commitment_scheme::qbinding::{
     BindingIndex, CommitKey, EquivKey, PublicParams, QBinding, Randomness,
 };
-use crate::stackable::schnorr::Schnorr;
-use crate::stackable::{Challenge, Message, Stackable};
+use crate::stackable::{Challenge, Message, Randomizable, Stackable};
 
 #[derive(Debug)]
 pub struct SelfStacker<S: Stackable>(PhantomData<S>);
 
-type S2 = SelfStacker<Schnorr>;
-type S4 = SelfStacker<S2>;
-type S8 = SelfStacker<S4>;
-type S16 = SelfStacker<S8>;
-type S32 = SelfStacker<S16>;
-type S64 = SelfStacker<S32>;
-type S128 = SelfStacker<S64>;
-type S256 = SelfStacker<S128>;
-type S512 = SelfStacker<S256>;
-type S1024 = SelfStacker<S512>;
-type S2048 = SelfStacker<S1024>;
-type S4096 = SelfStacker<S2048>;
-
-// macro_rules! selfstack {
-//     ($clauses:tt, $index:tt, $sigma:ty) => {
-//         (|| -> SelfStacker<T> {
-
-//         })
-//         let s = check_if_stackable::<$sigma>();
-
-//         SelfStacker<Schnorr>
-//     }
+// impl<S: Stackable> SelfStacker<S> {
+//     pub fn compile(
+//         binding_index: usize,
+//         nested_witness: S::Witness,
+//         statements: Vec<S::Statement>,
+//     ) {
+//         let clauses = Self::CLAUSES;
+//         let half = clauses / 2;
+//         let quarter = half / 2;
+//         let third = half + quarter;
+//         let bi: BindingIndex = if binding_index <=
+// quarter {             BindingIndex::One
+//         } else if binding_index <= half {
+//             BindingIndex::Two
+//         } else if binding_index <= third {
+//             BindingIndex::Three
+//         } else {
+//             BindingIndex::Four
+//         };
+//         let sk = StackedWitness::init(nested_witness,
+// bi);     }
 // }
-
-// type TestMacro = selfstack!(1, 2, Schnorr);
-
-// type StackedSigma =
-//     selfstack!(number_of_clauses, binding_index,
-// StackableBaseType);
 
 pub struct StackedStatement<S: Stackable> {
     pp: PublicParams,
@@ -53,6 +46,19 @@ pub struct StackedStatement<S: Stackable> {
     two: S::Statement,
     three: S::Statement,
     four: S::Statement,
+}
+
+impl<S: Stackable> Randomizable for StackedStatement<S> {
+    fn randomize<R: CryptoRngCore>(&mut self, rng: &mut R) {
+        self.one
+            .randomize(rng);
+        self.two
+            .randomize(rng);
+        self.three
+            .randomize(rng);
+        self.four
+            .randomize(rng);
+    }
 }
 
 impl<S: Stackable> StackedStatement<S> {
@@ -71,6 +77,21 @@ impl<S: Stackable> StackedStatement<S> {
             four,
         }
     }
+
+    // pub fn init(
+    //     pp: &PublicParams,
+    //     st: S::Statement,
+    //     binding_index: &BindingIndex,
+    // ) -> Self {
+    //     let default = S::Statement::default();
+    //     match binding_index {
+    //         BindingIndex::One => Self::new(pp, st, default,
+    // default, default),         BindingIndex::Two =>
+    // Self::new(pp, default, st, default, default),
+    //         BindingIndex::Three => Self::new(pp, default,
+    // default, st, default),         BindingIndex::Four =>
+    // Self::new(pp, default, default, default, st),     }
+    // }
 
     fn one(&self) -> &S::Statement {
         &self.one
@@ -188,12 +209,6 @@ impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
     type Challenge = S::Challenge;
     type MessageZ = StackedZ<S>;
     type ProverContext = S::ProverContext;
-    // type Precompute = S::Precompute;
-
-    // type MessageA = S::MessageA;
-    // type Challenge = S::Challenge;
-    // type MessageZ = S::MessageZ;
-    // type State = S::State;
 
     fn first<R: CryptoRngCore>(
         statement: &StackedStatement<S>,
@@ -323,7 +338,7 @@ impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
             BindingIndex::Four => (&temp.0, &temp.1, &temp.2, a),
         };
 
-        let aux_new = QBinding::equiv(&statement.pp, ek, v_old, v, *aux);
+        let aux_new = QBinding::equiv(&statement.pp, ek, v_old, v, aux);
         StackedZ {
             ck: *ck,
             message: nested_z,

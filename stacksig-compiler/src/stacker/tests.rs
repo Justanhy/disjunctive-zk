@@ -1,17 +1,60 @@
+use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
+use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use sigmazk::SigmaProtocol;
 
+use super::{SelfStacker, StackedStatement, StackedWitness};
+use crate::commitment_scheme::comm::PartialBindingCommScheme;
 use crate::commitment_scheme::qbinding::{
     BindingIndex, PublicParams, QBinding,
 };
 use crate::stackable::schnorr::Schnorr;
 use crate::stackable::Stackable;
 
-use super::{SelfStacker, StackedStatement, StackedWitness};
+use selfstack_macro::selfstack;
 
-type S2 = SelfStacker<Schnorr>;
+type S2Test = SelfStacker<Schnorr>;
+
+// fn binding_path(clauses: usize, binding_index: usize) ->
+// Vec<BindingIndex> {     let mut path = Vec::new();
+//     let mut i = binding_index;
+
+//     let two = clauses / 2;
+//     let one = two / 2;
+//     let three = two + one;
+//     let four = clauses;
+//     if binding_index <= one {
+//         path.push(BindingIndex::One);
+//         let tail = binding_path()
+//     } else if binding_index <= two {
+//         path.push(BindingIndex::Two);
+//     } else if binding_index <= three {
+//         path.push(BindingIndex::Three);
+//     } else if binding_index <= four {
+//         path.push(BindingIndex::Four);
+//     }
+// }
+
+#[test]
+fn selfstacker_works() {
+    const CLAUSES: usize = 128;
+    const BI: usize = 78;
+    // TODO: Macro should work with variables (not just
+    // literals)
+    selfstack!(128, Schnorr, StackedSig);
+    assert!(StackedSig::CLAUSES == CLAUSES);
+    let witness = Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
+    let mut pk: Vec<RistrettoPoint> = Vec::with_capacity(CLAUSES);
+    for i in 1..=128 {
+        if i == BI {
+            pk.push(&witness * RISTRETTO_BASEPOINT_POINT)
+        } else {
+            pk.push(RistrettoPoint::random(&mut ChaCha20Rng::from_entropy()))
+        }
+    }
+}
 
 #[allow(dead_code)]
 struct StackerTest {
@@ -62,9 +105,9 @@ fn first_message_works() {
     } = testinit(rng);
 
     let (state, message_a) =
-        S2::first(&s2_statement, &s2_witness, &mut rng.clone(), &());
+        S2Test::first(&s2_statement, &s2_witness, &mut rng.clone(), &());
     let (actual_state, actual_a) =
-        S2::first(&s2_statement, &valid_witness, rng, &());
+        S2Test::first(&s2_statement, &valid_witness, rng, &());
     assert!(message_a == actual_a);
     assert!(state == actual_state);
 }
@@ -80,11 +123,11 @@ fn third_message_works() {
     } = testinit(rng);
 
     let (state, message_a) =
-        S2::first(&s2_statement, &s2_witness, &mut rng.clone(), &());
-    let challenge = S2::second(verifier_rng);
+        S2Test::first(&s2_statement, &s2_witness, &mut rng.clone(), &());
+    let challenge = S2Test::second(verifier_rng);
     let message_z =
-        S2::third(&s2_statement, &state, &s2_witness, &challenge, rng, &());
-    assert!(S2::verify(
+        S2Test::third(&s2_statement, &state, &s2_witness, &challenge, rng, &());
+    assert!(S2Test::verify(
         &s2_statement,
         &message_a,
         &challenge,

@@ -14,6 +14,8 @@ use rand_core::{CryptoRngCore, SeedableRng};
 use crate::stackable::Message;
 use crate::util::hash;
 
+use super::comm::PartialBindingCommScheme;
+
 /// 1 out of 2 commitment scheme
 pub struct HalfBinding;
 
@@ -134,8 +136,6 @@ impl EquivKey {
     }
 }
 
-/// Implementation of 1-of-2 partially-binding vector
-/// commitment scheme
 impl HalfBinding {
     fn g2_from_g1(
         g1: &RistrettoPoint,
@@ -159,8 +159,40 @@ impl HalfBinding {
     ) -> CompressedRistretto {
         (h * rand + gi * hash(message)).compress()
     }
+    /// Setup of public parameters and generation of commit
+    /// key and equiv key
+    ///
+    /// Prefer this method over `setup` then `gen` if you
+    /// are generating keys immediately from setup.
+    fn setupgen<R: CryptoRngCore>(
+        rng: &mut R,
+        binding_side: Side,
+    ) -> (PublicParams, CommitKey, EquivKey) {
+        let h = RistrettoBasepointTable::create(&RistrettoPoint::random(
+            &mut ChaCha20Rng::from_entropy(),
+        ));
+        let g0 = RistrettoBasepointTable::create(&RistrettoPoint::random(
+            &mut ChaCha20Rng::from_entropy(),
+        ));
+        let pp = PublicParams(g0, h);
+        let (ck, ek) = Self::gen(&pp, binding_side, rng);
+        (pp, ck, ek)
+    }
+}
+
+/// Implementation of 1-of-2 partially-binding vector
+/// commitment scheme
+impl PartialBindingCommScheme for HalfBinding {
+    type PublicParams = PublicParams;
+    type BindingIndex = Side;
+    type CommitKey = CommitKey;
+    type EquivKey = EquivKey;
+    type Commitment = Commitment;
+    type Randomness = Randomness;
+    type Msg<'a, M: Message + 'a> = (&'a M, &'a M);
+
     /// Generate public parameters for the commitment scheme
-    pub fn setup<R: CryptoRngCore>(rng: &mut R) -> PublicParams {
+    fn setup<R: CryptoRngCore>(rng: &mut R) -> PublicParams {
         let h = &RistrettoPoint::random(rng);
         let g0 = &RistrettoPoint::random(rng);
         PublicParams(
@@ -175,7 +207,7 @@ impl HalfBinding {
     /// `pp`: Public parameters
     ///
     /// `side`: Binding side
-    pub fn gen<R: CryptoRngCore>(
+    fn gen<R: CryptoRngCore>(
         pp: &PublicParams,
         binding_side: Side,
         rng: &mut R,
@@ -212,26 +244,6 @@ impl HalfBinding {
         }
     }
 
-    /// Setup of public parameters and generation of commit
-    /// key and equiv key
-    ///
-    /// Prefer this method over `setup` then `gen` if you
-    /// are generating keys immediately from setup.
-    pub fn setupgen<R: CryptoRngCore>(
-        rng: &mut R,
-        binding_side: Side,
-    ) -> (PublicParams, CommitKey, EquivKey) {
-        let h = RistrettoBasepointTable::create(&RistrettoPoint::random(
-            &mut ChaCha20Rng::from_entropy(),
-        ));
-        let g0 = RistrettoBasepointTable::create(&RistrettoPoint::random(
-            &mut ChaCha20Rng::from_entropy(),
-        ));
-        let pp = PublicParams(g0, h);
-        let (ck, ek) = Self::gen(&pp, binding_side, rng);
-        (pp, ck, ek)
-    }
-
     /// Commit to a message in it's binding side
     ///
     /// ## Parameters
@@ -247,7 +259,7 @@ impl HalfBinding {
     /// the commitment. Commit honestly to both sides as we
     /// don't know which side is the binding side.
     /// 3. Return the commitment for both sides together
-    pub fn bind<M: Message + ?Sized>(
+    fn bind<M: Message + ?Sized>(
         pp: &PublicParams,
         ck: CommitKey,
         msg: (&M, &M),
@@ -287,7 +299,7 @@ impl HalfBinding {
     /// ## Returns
     /// The 2-tuple of bytes representing the commitment of
     /// each side
-    pub fn equivcom<M: Message + ?Sized>(
+    fn equivcom<M: Message + ?Sized>(
         pp: &PublicParams,
         ek: &EquivKey,
         msg: (&M, &M),
@@ -329,11 +341,12 @@ impl HalfBinding {
     /// ## Returns
     /// The new auxiliary information for equivocation (i.e.
     /// updated randomness for the equivocable side)
-    pub fn equiv<M: Message + ?Sized>(
+    fn equiv<M: Message + ?Sized>(
+        _pp: &PublicParams,
         ek: &EquivKey,
         old: (&M, &M),
         new: (&M, &M),
-        old_aux: Randomness,
+        old_aux: &Randomness,
     ) -> Randomness {
         let EquivKey {
             binding_side,
@@ -350,14 +363,14 @@ impl HalfBinding {
                 let old2 = hash(old.1);
                 let new_equiv = hash(new.1);
                 let delta = &new_equiv - &old2;
-                Randomness(r1, r2 - trapdoor * delta)
+                Randomness(*r1, r2 - trapdoor * delta)
             }
             Side::Two => {
                 // equiv side is left
                 let old1 = hash(old.0);
                 let new_equiv = hash(new.0);
                 let delta = &new_equiv - &old1;
-                Randomness(r1 - trapdoor * delta, r2)
+                Randomness(r1 - trapdoor * delta, *r2)
             }
         }
     }
@@ -416,7 +429,7 @@ mod tests {
 
         let (comm_equivcom, aux_old) =
             HalfBinding::equivcom(&pp, &ek, m, Some(aux));
-        let aux_new = HalfBinding::equiv(&ek, m, m_equiv, aux_old);
+        let aux_new = HalfBinding::equiv(&pp, &ek, m, m_equiv, &aux_old);
         let comm_bind = HalfBinding::bind(&pp, ck, m_equiv, aux_new);
         assert_eq!(comm_equivcom, comm_bind);
     }
@@ -438,8 +451,8 @@ mod tests {
 
         assert_ne!(comm1, comm2); // TODO: Check if this is supposed to be indistinguishable
 
-        let aux1_new = HalfBinding::equiv(&ek, m, m_equiv, aux1);
-        let aux2_new = HalfBinding::equiv(&ek, m_equiv, m, aux2);
+        let aux1_new = HalfBinding::equiv(&pp, &ek, m, m_equiv, &aux1);
+        let aux2_new = HalfBinding::equiv(&pp, &ek, m_equiv, m, &aux2);
 
         let comm1_bind = HalfBinding::bind(&pp, ck, m_equiv, aux1_new);
         let comm2_bind = HalfBinding::bind(&pp, ck, m, aux2_new);

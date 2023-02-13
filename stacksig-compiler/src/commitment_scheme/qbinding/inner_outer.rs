@@ -12,6 +12,10 @@ impl<T: Clone> Inner<T> {
         Self(inner)
     }
 
+    pub fn as_vec(&self) -> &Vec<T> {
+        &self.0
+    }
+
     pub fn push(&mut self, t: T) {
         self.0
             .push(t);
@@ -28,9 +32,14 @@ impl<T: Clone> Inner<T> {
     }
 
     /// Get copies of the vector of first N - 1 elements and
-    /// the last element
+    /// the last element.
+    ///
+    /// Think of this as uncapping a bottle of water where
+    /// the cap is the last element of the vector. Hence
+    /// the name.
+    ///
     /// TODO: Replace Option with Result
-    pub fn gen_inner_t(&self) -> Option<(Self, T)> {
+    pub fn uncap(&self) -> Option<(Self, T)> {
         if self
             .0
             .len()
@@ -40,7 +49,7 @@ impl<T: Clone> Inner<T> {
         }
 
         let mut copy = self
-            .0
+            .as_vec()
             .clone();
         let outer = copy
             .pop()
@@ -62,7 +71,7 @@ pub trait InnerOuter<T: Clone + Debug> {
     fn compose(&self) -> Inner<T> {
         let mut inner = self
             .get_inner()
-            .0
+            .as_vec()
             .clone();
         inner.push(
             self.get_outer()
@@ -70,16 +79,16 @@ pub trait InnerOuter<T: Clone + Debug> {
         );
         Inner::init(inner)
     }
-    /// Unrolls the inner vector into a new InnerOuter
-    /// instance with a outer component that is normally
-    /// the last element of the inner vector
-    fn unroll(&self, initial: Self::Fields) -> Self
+    /// Extract the inner vector and compile it into a new
+    /// InnerOuter instance with a outer component that
+    /// was the last element of the inner vector
+    fn extract(&self, initial: Self::Fields) -> Self
     where
         Self: Sized,
     {
         let (inner, outer) = self
             .get_inner()
-            .gen_inner_t()
+            .uncap()
             .unwrap();
         Self::init(&inner, &outer, &initial)
     }

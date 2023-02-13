@@ -1,5 +1,7 @@
 pub mod inner_outer;
 pub mod qbinding;
+#[cfg(test)]
+mod tests;
 use std::io::Write;
 
 use inner_outer::*;
@@ -27,6 +29,10 @@ impl BindingIndex {
         Self { q, length, index }
     }
 
+    pub fn q(&self) -> usize {
+        self.q
+    }
+
     pub fn index(&self) -> usize {
         self.index
     }
@@ -45,8 +51,7 @@ impl BindingIndex {
     }
 
     pub fn get_inner(&self) -> Self {
-        let raw = self.get_inner_raw();
-        BindingIndex::new(self.q - 1, raw)
+        BindingIndex::new(self.q - 1, self.get_inner_raw())
     }
 
     pub fn base_inner(&self) -> Option<Side> {
@@ -71,21 +76,19 @@ impl BindingIndex {
     }
 
     pub fn get_inner_outer(&self) -> (BindingIndex, Side) {
-        let ia = self.get_inner();
-        let ib = self.get_outer();
-        (ia, ib)
+        (self.get_inner(), self.get_outer())
     }
 
     pub fn base_inner_outer(&self) -> (Side, Side) {
-        let ia = self
-            .base_inner()
-            .unwrap();
-        let ib = self.get_outer();
-        (ia, ib)
+        (
+            self.base_inner()
+                .unwrap(),
+            self.get_outer(),
+        )
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PublicParams {
     inner: Inner<halfbinding::PublicParams>,
     outer: halfbinding::PublicParams,
@@ -114,17 +117,6 @@ impl InnerOuter<halfbinding::PublicParams> for PublicParams {
     }
 }
 
-impl PublicParams {
-    // pub fn gen_inner_pp(&self) -> Option<Self> {
-    //     let (inner, outer) = self
-    //         .inner
-    //         .gen_inner_t()
-    //         .unwrap();
-
-    //     Some(Self { inner, outer })
-    // }
-}
-
 #[derive(Clone, Debug, PartialEq, Hash, Default)]
 pub struct CommitKey {
     pub inner_ck: Inner<halfbinding::CommitKey>,
@@ -135,7 +127,7 @@ impl CommitKey {
     pub fn gen_inner_ck(&self) -> Option<Self> {
         let (inner_ck, outer_ck) = self
             .inner_ck
-            .gen_inner_t()
+            .uncap()
             .unwrap();
 
         Some(Self { inner_ck, outer_ck })
@@ -220,7 +212,7 @@ impl Inner<halfbinding::Randomness> {
 impl Randomness {
     pub fn random<R: CryptoRngCore>(rng: &mut R, q: usize) -> Self {
         Randomness {
-            inner: Inner::<halfbinding::Randomness>::random(rng, q),
+            inner: Inner::<halfbinding::Randomness>::random(rng, q - 1),
             outer: halfbinding::Randomness::random(rng),
         }
     }
@@ -243,18 +235,18 @@ impl EquivKey {
         &self.ck
     }
 
-    pub fn unroll(&self) -> Self
+    pub fn extract(&self) -> Self
     where
         Self: Sized,
     {
         let initial = (
             self.ck
-                .unroll(()),
+                .extract(()),
             self.binding_index
                 .get_inner(),
         );
 
-        <Self as InnerOuter<halfbinding::EquivKey>>::unroll(&self, initial)
+        <Self as InnerOuter<halfbinding::EquivKey>>::extract(&self, initial)
     }
 }
 

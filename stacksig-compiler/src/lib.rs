@@ -10,7 +10,7 @@ pub mod fiat;
 pub mod schnorr;
 mod stack;
 pub mod stackable;
-pub mod stacker;
+pub mod stackers;
 mod util;
 
 // use compiler::*;

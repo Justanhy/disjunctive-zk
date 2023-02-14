@@ -1,6 +1,8 @@
 //! Implementation of 1-of-2^q partially-binding vector
 //! commitment from discrete log using halfbinding comitment
 //! schemes
+use std::rc::Rc;
+
 use crate::commitment_scheme::comm::PartialBindingCommScheme;
 use crate::commitment_scheme::halfbinding::{Commitment, HalfBinding};
 
@@ -68,7 +70,7 @@ impl PartialBindingCommScheme for QBinding {
     type EquivKey = EquivKey;
     type Commitment = Commitment;
     type Randomness = Randomness;
-    type Msg<'a, M: Message + 'a> = Vec<&'a M>;
+    type Msg<'a, M: Message + 'a> = Vec<Rc<M>>;
 
     /// Setup public parameters
     fn setup<R: CryptoRngCore>(&self, rng: &mut R) -> PublicParams {
@@ -77,7 +79,6 @@ impl PartialBindingCommScheme for QBinding {
             outer: HalfBinding.setup(rng),
         };
         self.fold(base, |inner, _| {
-            // dbg!(i);
             let outer = HalfBinding.setup(rng);
             PublicParams {
                 inner: inner.compose(),
@@ -155,11 +156,9 @@ impl PartialBindingCommScheme for QBinding {
         &self,
         pp: &PublicParams,
         ek: &EquivKey,
-        msg: &Vec<&'a M>,
+        msg: &Vec<Rc<M>>,
         aux: Option<Randomness>,
     ) -> (Commitment, Randomness) {
-        // dbg!("Committing", self.q);
-
         let bound_index = ek
             .binding_index
             .index();
@@ -176,10 +175,10 @@ impl PartialBindingCommScheme for QBinding {
                 .base_inner()
                 .unwrap();
             // Create vector for the base binding
-            let mdefault = M::default();
+            let mdefault = Rc::new(M::default());
             let message = match inner_side {
-                Side::One => (msg[bound_index], &mdefault),
-                Side::Two => (&mdefault, msg[bound_index]),
+                Side::One => (msg[bound_index].clone(), mdefault),
+                Side::Two => (mdefault, msg[bound_index].clone()),
             };
             // Get inner commitment and auxiliary randomness
             let (inner_comm, inner_aux) = HalfBinding.equivcom(
@@ -198,8 +197,8 @@ impl PartialBindingCommScheme for QBinding {
             };
             // Initialise vector of legnth 2^(q-1) == length of the
             // inner commitment scheme
-            let mdefault = M::default();
-            let message: Vec<&M> = (0..self.inner_length())
+            let mdefault = Rc::new(M::default());
+            let message: Vec<Rc<M>> = (0..self.inner_length())
                 .map(|i| {
                     // get the raw value of the inner binding index
                     // from the current binding index
@@ -207,9 +206,9 @@ impl PartialBindingCommScheme for QBinding {
                         .binding_index()
                         .get_inner_raw();
                     if i == inner_index {
-                        msg[bound_index]
+                        msg[bound_index].clone()
                     } else {
-                        &mdefault
+                        mdefault.clone()
                     }
                 })
                 .collect();
@@ -227,14 +226,13 @@ impl PartialBindingCommScheme for QBinding {
 
         // Create v_b which is deafult value except at the
         // binding index for B
-        let mut outer_vec: (&Commitment, &Commitment) =
-            (&Commitment::default(), &Commitment::default());
-        match ek
+        let def_comm = Rc::new(Commitment::default());
+        let outer_vec = match ek
             .binding_index
             .get_outer()
         {
-            Side::One => outer_vec.0 = &inner_comm,
-            Side::Two => outer_vec.1 = &inner_comm,
+            Side::One => (Rc::new(inner_comm), def_comm),
+            Side::Two => (def_comm, Rc::new(inner_comm)),
         };
         // Commit to v_b
         let (outer_comm, outer_aux) = HalfBinding.equivcom(
@@ -269,16 +267,17 @@ impl PartialBindingCommScheme for QBinding {
         &self,
         pp: &PublicParams,
         ck: &CommitKey,
-        msg: &Vec<&'a M>,
+        msg: &Vec<Rc<M>>,
         r: &Randomness,
     ) -> Commitment {
-        // dbg!(self.q);
         let (comm1, comm2) = if self.is_base() {
             // Base case
             let (pp, ck, r) =
                 (pp.base_inner(), ck.base_inner(), r.base_inner());
-            let comm1 = HalfBinding.bind(pp, ck, &(msg[0], msg[1]), r);
-            let comm2 = HalfBinding.bind(pp, ck, &(msg[2], msg[3]), r);
+            let comm1 =
+                HalfBinding.bind(pp, ck, &(msg[0].clone(), msg[1].clone()), r);
+            let comm2 =
+                HalfBinding.bind(pp, ck, &(msg[2].clone(), msg[3].clone()), r);
 
             (comm1, comm2)
         } else {
@@ -298,7 +297,7 @@ impl PartialBindingCommScheme for QBinding {
         return HalfBinding.bind(
             pp.get_outer(),
             ck.get_outer(),
-            &(&comm1, &comm2),
+            &(Rc::new(comm1), Rc::new(comm2)),
             r.get_outer(),
         );
     }
@@ -307,20 +306,18 @@ impl PartialBindingCommScheme for QBinding {
         &self,
         pp: &PublicParams,
         ek: &EquivKey,
-        old: &Vec<&'a M>,
-        new: &Vec<&'a M>,
+        old: &Vec<Rc<M>>,
+        new: &Vec<Rc<M>>,
         old_aux: &Randomness,
     ) -> Randomness {
-        dbg!("Equivocating", self.q);
         let bound_index = ek
             .binding_index
             .index();
-        let mdefault = M::default();
+        let mdefault = Rc::new(M::default());
 
         let (inner_comm, new_comm1, new_comm2, new_inner_aux) = if self
             .is_base()
         {
-            // dbg!("Base case");
             // Base case
             // Get sides from binding index
             let (inner_side, outer_side) = ek
@@ -329,13 +326,13 @@ impl PartialBindingCommScheme for QBinding {
             // Equivocate the inner commitment
             // First recreate the old inner message
             let old_inner_message = match inner_side {
-                Side::One => (old[0], &mdefault),
-                Side::Two => (&mdefault, old[1]),
+                Side::One => (old[0].clone(), mdefault),
+                Side::Two => (mdefault, old[1].clone()),
             };
             // Then determine the new inner message
             let new_inner_message = match outer_side {
-                Side::One => (new[0], new[1]),
-                Side::Two => (new[2], new[3]),
+                Side::One => (new[0].clone(), new[1].clone()),
+                Side::Two => (new[2].clone(), new[3].clone()),
             };
             let (pp, ck, ek, old_aux) = (
                 pp.base_inner(),
@@ -358,20 +355,32 @@ impl PartialBindingCommScheme for QBinding {
                 HalfBinding.bind(pp, ck, &old_inner_message, &new_inner_aux);
             // Commit to every chunk with the new auxiliary
             // randomness
-            let new_comm1 =
-                HalfBinding.bind(pp, ck, &(new[0], new[1]), &new_inner_aux);
-            let new_comm2 =
-                HalfBinding.bind(pp, ck, &(new[2], new[3]), &new_inner_aux);
+            let new_comm1 = HalfBinding.bind(
+                pp,
+                ck,
+                &(new[0].clone(), new[1].clone()),
+                &new_inner_aux,
+            );
+            let new_comm2 = HalfBinding.bind(
+                pp,
+                ck,
+                &(new[2].clone(), new[3].clone()),
+                &new_inner_aux,
+            );
 
-            (inner_comm, new_comm1, new_comm2, Inner::new(new_inner_aux))
+            (
+                Rc::new(inner_comm),
+                Rc::new(new_comm1),
+                Rc::new(new_comm2),
+                Inner::new(new_inner_aux),
+            )
         } else {
-            // dbg!("Recursive case");
             // Recursive case
             let inner_q = QBinding::new(self.q - 1);
 
             // We first equivocate the inner commitment
             // Start by recreating the old inner message
-            let old_inner_message: Vec<&M> = (0..self.inner_length())
+            let old_inner_message: Vec<Rc<M>> = (0..self.inner_length())
                 .map(|i| {
                     // Get the raw value of the inner index with respect
                     // to the lower level commitment scheme
@@ -379,9 +388,9 @@ impl PartialBindingCommScheme for QBinding {
                         .binding_index()
                         .get_inner_raw();
                     if i == inner_index {
-                        old[bound_index]
+                        old[bound_index].clone()
                     } else {
-                        &mdefault
+                        mdefault.clone()
                     }
                 })
                 .collect();
@@ -394,7 +403,7 @@ impl PartialBindingCommScheme for QBinding {
                 .get_outer();
             let chunk1 = new[0..self.inner_length()].to_vec();
             let chunk2 = new[self.inner_length()..].to_vec();
-            let new_inner_message: &Vec<&M> = match outer_side {
+            let new_inner_message: &Vec<Rc<M>> = match outer_side {
                 Side::One => &chunk1,
                 Side::Two => &chunk2,
             };
@@ -429,22 +438,27 @@ impl PartialBindingCommScheme for QBinding {
             let new_comm1 = inner_q.bind(pp, ck, &chunk1, &new_inner_aux);
             let new_comm2 = inner_q.bind(pp, ck, &chunk2, &new_inner_aux);
 
-            (inner_comm, new_comm1, new_comm2, new_inner_aux.compose())
+            (
+                Rc::new(inner_comm),
+                Rc::new(new_comm1),
+                Rc::new(new_comm2),
+                new_inner_aux.compose(),
+            )
         };
 
         // Recompute our outer level commitment vector with the new
         // inner commitment that has been equivocated
-        let cdefault = Commitment::default();
+        let cdefault = Rc::new(Commitment::default());
         let old_outer_message = match ek
             .binding_index()
             .get_outer()
         {
-            Side::One => (&inner_comm, &cdefault),
-            Side::Two => (&cdefault, &inner_comm),
+            Side::One => (inner_comm, cdefault),
+            Side::Two => (cdefault, inner_comm),
         };
         // Create our new outer message which we got by binding to
         // each chunk of our new message
-        let new_outer_message = (&new_comm1, &new_comm2);
+        let new_outer_message = (new_comm1, new_comm2);
         // Equivocate the outer layer commitment vector
         let new_outer_aux = HalfBinding.equiv(
             pp.get_outer(),
@@ -472,9 +486,9 @@ mod tests {
     fn warzone() {
         let rng1 = &mut ChaCha20Rng::from_seed([0u8; 32]);
         let rng2 = &mut ChaCha20Rng::from_seed([0u8; 32]);
-        let mdefault = "default".as_bytes();
-        let equiv = "equiv".as_bytes();
-        let bounded_msg = "hello world".as_bytes();
+        let mdefault = Rc::new("default".as_bytes());
+        let equiv = Rc::new("equiv".as_bytes());
+        let bounded_msg = Rc::new("hello world".as_bytes());
 
         const Q1: usize = 2;
         const B: usize = 2;
@@ -486,22 +500,22 @@ mod tests {
         let mut msg_equiv1 = Vec::with_capacity(1 << Q1);
         for i in 0..binding_index1.length() {
             if i == B {
-                msg1.push(&bounded_msg);
-                msg_equiv1.push(&bounded_msg);
+                msg1.push(bounded_msg.clone());
+                msg_equiv1.push(bounded_msg.clone());
             } else {
-                msg1.push(&mdefault);
-                msg_equiv1.push(&equiv);
+                msg1.push(mdefault.clone());
+                msg_equiv1.push(equiv.clone());
             }
         }
         let mut msg2 = Vec::with_capacity(1 << Q2);
         let mut msg_equiv2 = Vec::with_capacity(1 << Q2);
         for i in 0..binding_index2.length() {
             if i == B {
-                msg2.push(&bounded_msg);
-                msg_equiv2.push(&bounded_msg);
+                msg2.push(bounded_msg.clone());
+                msg_equiv2.push(bounded_msg.clone());
             } else {
-                msg2.push(&mdefault);
-                msg_equiv2.push(&equiv);
+                msg2.push(mdefault.clone());
+                msg_equiv2.push(equiv.clone());
             }
         }
         let aux1 = Randomness::random(&mut rng1.clone(), Q1);
@@ -528,8 +542,6 @@ mod tests {
         assert!(aux_new1 == aux_new2.extract(()));
         let comm_bind1 = qbinding1.bind(&pp1, &ck1, &msg_equiv1, &aux_new1);
         let comm_bind2 = qbinding2.bind(&pp2, &ck2, &msg_equiv2, &aux_new2);
-        dbg!(comm_equivcom2);
-        dbg!(comm_bind2);
         assert_eq!(comm_equivcom1, comm_bind1);
         assert_eq!(comm_equivcom2, comm_bind2);
     }
@@ -537,37 +549,31 @@ mod tests {
     #[test]
     fn test_qbinding_recursive_works() {
         let rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
-        let mdefault = "default".as_bytes();
-        let equiv = "equiv".as_bytes();
-        let bounded_msg = "hello world".as_bytes();
+        let mdefault = Rc::new("default".as_bytes());
+        let equiv = Rc::new("equiv".as_bytes());
+        let bounded_msg = Rc::new("hello world".as_bytes());
 
         const Q: usize = 3;
         const B: usize = 2;
         let (qbinding, binding_index) = QBinding::init(Q, B);
         let mut msg = Vec::with_capacity(1 << Q);
         let mut msg_equiv = Vec::with_capacity(1 << Q);
-        // dbg!(msg.capacity());
         for i in 0..binding_index.length() {
             if i == B {
-                msg.push(&bounded_msg);
-                msg_equiv.push(&bounded_msg);
+                msg.push(bounded_msg.clone());
+                msg_equiv.push(bounded_msg.clone());
             } else {
-                msg.push(&mdefault);
-                msg_equiv.push(&equiv);
+                msg.push(mdefault.clone());
+                msg_equiv.push(equiv.clone());
             }
         }
-        // dbg!("tesa");
         let aux = Randomness::random(&mut rng.clone(), Q);
-        // dbg!("Beginning setup");
         let pp = qbinding.setup(&mut rng.clone());
-        // dbg!("Beginning keygen");
         let (ck, ek) = qbinding.gen(&pp, binding_index, &mut rng.clone());
 
-        // dbg!("Beginning protocol");
         let (comm_equivcom, aux_old) =
             qbinding.equivcom(&pp, &ek, &msg, Some(aux));
         let aux_new = qbinding.equiv(&pp, &ek, &msg, &msg_equiv, &aux_old);
-        // dbg!("Done");
         let comm_bind = qbinding.bind(&pp, &ck, &msg_equiv, &aux_new);
         assert_eq!(comm_equivcom, comm_bind);
     }
@@ -575,13 +581,13 @@ mod tests {
     #[test]
     fn test_qbinding_base_works() {
         let rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
-        let m1 = "hello".as_bytes();
-        let m2 = "world".as_bytes();
-        let m3 = "this is a test".as_bytes();
-        let m4 = "can you hear me?".as_bytes();
-        let none = "".as_bytes();
-        let msg = vec![&none, &none, &m3, &none];
-        let msg_equiv = vec![&m1, &m2, &m3, &m4];
+        let m1 = Rc::new("hello".as_bytes());
+        let m2 = Rc::new("world".as_bytes());
+        let m3 = Rc::new("this is a test".as_bytes());
+        let m4 = Rc::new("can you hear me?".as_bytes());
+        let none = Rc::new("".as_bytes());
+        let msg = vec![none.clone(), none.clone(), m3.clone(), none];
+        let msg_equiv = vec![m1, m2, m3, m4];
 
         const Q: usize = 2;
         let (qbinding, binding_index) = QBinding::init(Q, 2);
@@ -599,13 +605,13 @@ mod tests {
     #[test]
     fn test_qbinding_fails() {
         let rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
-        let m1 = "hello".as_bytes();
-        let m2 = "world".as_bytes();
-        let m3 = "this is a test".as_bytes();
-        let m4 = "can you hear me?".as_bytes();
-        let none = "".as_bytes();
-        let msg = vec![&m1, &m2, &none, &none];
-        let msg_equiv = vec![&m1, &m2, &m3, &m4];
+        let m1 = Rc::new("hello".as_bytes());
+        let m2 = Rc::new("world".as_bytes());
+        let m3 = Rc::new("this is a test".as_bytes());
+        let m4 = Rc::new("can you hear me?".as_bytes());
+        let none = Rc::new("".as_bytes());
+        let msg = vec![m1.clone(), m2.clone(), none.clone(), none];
+        let msg_equiv = vec![m1, m2, m3, m4];
 
         const Q: usize = 2;
         let aux = Randomness::random(rng, Q);

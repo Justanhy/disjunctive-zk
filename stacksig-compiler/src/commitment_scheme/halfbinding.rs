@@ -3,6 +3,7 @@
 
 use core::fmt;
 use std::io::Write;
+use std::rc::Rc;
 
 use curve25519_dalek::ristretto::{
     CompressedRistretto, RistrettoBasepointTable, RistrettoPoint,
@@ -37,8 +38,8 @@ impl Side {
 
 #[derive(Clone)]
 pub struct PublicParams(
-    Box<RistrettoBasepointTable>,
-    Box<RistrettoBasepointTable>,
+    Rc<RistrettoBasepointTable>,
+    Rc<RistrettoBasepointTable>,
 );
 
 impl PartialEq for PublicParams {
@@ -173,10 +174,10 @@ impl HalfBinding {
     fn commitment<M: Message + ?Sized>(
         gi: &RistrettoPoint,
         h: &RistrettoBasepointTable,
-        message: &M,
+        message: Rc<M>,
         rand: &Scalar,
     ) -> CompressedRistretto {
-        (h * rand + gi * hash(message)).compress()
+        (h * rand + gi * hash(message.as_ref())).compress()
     }
     /// Setup of public parameters and generation of commit
     /// key and equiv key
@@ -194,7 +195,7 @@ impl HalfBinding {
         let g0 = RistrettoBasepointTable::create(&RistrettoPoint::random(
             &mut ChaCha20Rng::from_entropy(),
         ));
-        let pp = PublicParams(Box::new(g0), Box::new(h));
+        let pp = PublicParams(Rc::new(g0), Rc::new(h));
         let (ck, ek) = self.gen(&pp, binding_side, rng);
         (pp, ck, ek)
     }
@@ -209,15 +210,15 @@ impl PartialBindingCommScheme for HalfBinding {
     type EquivKey = EquivKey;
     type Commitment = Commitment;
     type Randomness = Randomness;
-    type Msg<'a, M: Message + 'a> = (&'a M, &'a M);
+    type Msg<'a, M: Message + 'a> = (Rc<M>, Rc<M>);
 
     /// Generate public parameters for the commitment scheme
     fn setup<R: CryptoRngCore>(&self, rng: &mut R) -> PublicParams {
         let h = &RistrettoPoint::random(rng);
         let g0 = &RistrettoPoint::random(rng);
         PublicParams(
-            Box::new(RistrettoBasepointTable::create(g0)),
-            Box::new(RistrettoBasepointTable::create(h)),
+            Rc::new(RistrettoBasepointTable::create(g0)),
+            Rc::new(RistrettoBasepointTable::create(h)),
         )
     }
 
@@ -284,7 +285,7 @@ impl PartialBindingCommScheme for HalfBinding {
         &self,
         pp: &PublicParams,
         ck: &CommitKey,
-        msg: &(&M, &M),
+        msg: &(Rc<M>, Rc<M>),
         randomness: &Randomness,
     ) -> Commitment {
         let PublicParams(g0, h) = pp;
@@ -298,8 +299,8 @@ impl PartialBindingCommScheme for HalfBinding {
         let Randomness(r1, r2) = randomness;
         // We hash the message so that we can commit to longer
         // strings
-        let comm1 = Self::commitment(&g1, h, *m1, &r1);
-        let comm2 = Self::commitment(&g2, h, *m2, &r2);
+        let comm1 = Self::commitment(&g1, h, m1.clone(), &r1);
+        let comm2 = Self::commitment(&g2, h, m2.clone(), &r2);
         Commitment(*comm1.as_bytes(), *comm2.as_bytes())
     }
 
@@ -325,7 +326,7 @@ impl PartialBindingCommScheme for HalfBinding {
         &self,
         pp: &PublicParams,
         ek: &EquivKey,
-        msg: &(&M, &M),
+        msg: &(Rc<M>, Rc<M>),
         randomness: Option<Randomness>,
     ) -> (Commitment, Randomness) {
         let EquivKey { commit_key, .. } = ek;
@@ -368,8 +369,8 @@ impl PartialBindingCommScheme for HalfBinding {
         &self,
         _pp: &PublicParams,
         ek: &EquivKey,
-        old: &(&M, &M),
-        new: &(&M, &M),
+        old: &(Rc<M>, Rc<M>),
+        new: &(Rc<M>, Rc<M>),
         old_aux: &Randomness,
     ) -> Randomness {
         let EquivKey {
@@ -384,15 +385,27 @@ impl PartialBindingCommScheme for HalfBinding {
         match binding_side {
             Side::One => {
                 // equiv side is Two
-                let old2 = hash(old.1);
-                let new_equiv = hash(new.1);
+                let old2 = hash(
+                    old.1
+                        .as_ref(),
+                );
+                let new_equiv = hash(
+                    new.1
+                        .as_ref(),
+                );
                 let delta = &new_equiv - &old2;
                 Randomness(*r1, r2 - trapdoor * delta)
             }
             Side::Two => {
                 // equiv side is left
-                let old1 = hash(old.0);
-                let new_equiv = hash(new.0);
+                let old1 = hash(
+                    old.0
+                        .as_ref(),
+                );
+                let new_equiv = hash(
+                    new.0
+                        .as_ref(),
+                );
                 let delta = &new_equiv - &old1;
                 Randomness(r1 - trapdoor * delta, *r2)
             }
@@ -442,8 +455,8 @@ mod tests {
         let aux = Randomness::random(rng);
         let msg = "hello world";
         let msg2 = "goodbye world";
-        let m = (&msg.as_bytes(), &<&[u8]>::default());
-        let m_equiv = (&msg.as_bytes(), &msg2.as_bytes());
+        let m = (Rc::new(msg.as_bytes()), Rc::new(<&[u8]>::default()));
+        let m_equiv = (Rc::new(msg.as_bytes()), Rc::new(msg2.as_bytes()));
         let pp = HalfBinding.setup(rng);
         let (ck, ek) = HalfBinding.gen(&pp, Side::One, rng);
 
@@ -460,8 +473,8 @@ mod tests {
         let aux = Randomness::random(rng);
         let msg = "hello world";
         let msg2 = "goodbye world";
-        let m = (&msg.as_bytes(), &<&[u8]>::default());
-        let m_equiv = (&msg.as_bytes(), &msg2.as_bytes());
+        let m = (Rc::new(msg.as_bytes()), Rc::new(<&[u8]>::default()));
+        let m_equiv = (Rc::new(msg.as_bytes()), Rc::new(msg2.as_bytes()));
         let pp = HalfBinding.setup(rng);
         let (ck, ek) = HalfBinding.gen(&pp, Side::One, rng);
 

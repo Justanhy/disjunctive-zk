@@ -4,7 +4,7 @@ use sigmazk::{EHVzk, SigmaProtocol};
 use std::fmt::Debug;
 use std::io::Write;
 
-pub trait Message: Debug + Default {
+pub trait Message: Debug + Default + Clone {
     fn write<W: Write>(&self, writer: &mut W)
     where
         Self: Sized;
@@ -35,6 +35,6 @@ pub trait Randomizable {
 pub trait Stackable:
     SigmaProtocol<MessageA: Message, MessageZ: Message, Challenge: Challenge>
     + EHVzk
+    + Clone
 {
-    const CLAUSES: usize = 1;
 }

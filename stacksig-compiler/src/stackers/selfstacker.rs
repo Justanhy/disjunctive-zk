@@ -1,418 +1,375 @@
-// use std::fmt;
-// use std::io::Write;
-// use std::marker::PhantomData;
+use std::fmt;
+use std::io::Write;
+use std::iter::Map;
+use std::rc::Rc;
 
-// use rand::SeedableRng;
-// use rand_chacha::ChaCha20Rng;
-// use rand_core::CryptoRngCore;
-// use sigmazk::{EHVzk, SigmaProtocol};
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
+use rand_core::CryptoRngCore;
+use sigmazk::{EHVzk, SigmaProtocol};
 
-// use crate::commitment_scheme::comm::PartialBindingCommScheme;
-// use crate::commitment_scheme::halfbinding::{
-//     CommitKey, Commitment, EquivKey, HalfBinding,
-// PublicParams, Randomness,     Side,
-// };
-// use crate::commitment_scheme::qbinding::BindingIndex;
-// use crate::stackable::{Challenge, Message, Stackable};
+use crate::commitment_scheme::comm::PartialBindingCommScheme;
+use crate::commitment_scheme::halfbinding::Commitment;
+use crate::commitment_scheme::qbinding::{
+    BindingIndex, CommitKey, EquivKey, PublicParams, QBinding, Randomness,
+};
+use crate::stackable::{Challenge, Message, Stackable};
 
-// #[derive(Debug)]
-// pub struct SelfStacker<S: Stackable>(PhantomData<S>);
+pub struct StackedStatement<S: Stackable> {
+    pp: PublicParams,
+    clauses: usize,
+    statements: Vec<S::Statement>,
+}
 
-// #[derive(Copy, Clone, Debug, PartialEq)]
-// pub struct Binding {
-//     pub inner: Side,
-//     pub outer: Option<Side>,
-// }
+impl<S: Stackable> StackedStatement<S> {
+    pub fn pp(&self) -> &PublicParams {
+        &self.pp
+    }
 
-// impl From<BindingIndex> for Binding {
-//     fn from(binding_index: BindingIndex) -> Self {
-//         match binding_index {
-//             BindingIndex::One => Binding {
-//                 inner: Side::One,
-//                 outer: Some(Side::One),
-//             },
-//             BindingIndex::Two => Binding {
-//                 inner: Side::Two,
-//                 outer: Some(Side::One),
-//             },
-//             BindingIndex::Three => Binding {
-//                 inner: Side::One,
-//                 outer: Some(Side::Two),
-//             },
-//             BindingIndex::Four => Binding {
-//                 inner: Side::Two,
-//                 outer: Some(Side::Two),
-//             },
-//         }
-//     }
-// }
+    pub fn clauses(&self) -> usize {
+        self.clauses
+    }
 
-// impl From<Side> for Binding {
-//     fn from(side: Side) -> Self {
-//         Binding {
-//             inner: side,
-//             outer: None,
-//         }
-//     }
-// }
+    pub fn height(&self) -> usize {
+        self.clauses
+            .to_be_bytes()
+            .len()
+    }
 
-// pub struct StackedStatement<S: Stackable> {
-//     pub pp: PublicParams,
-//     one: S::Statement,
-//     two: S::Statement,
-//     // three: S::Statement,
-//     // four: S::Statement,
-// }
+    pub fn statements(&self) -> &Vec<S::Statement> {
+        &self.statements
+    }
 
-// impl<S: Stackable> StackedStatement<S> {
-//     pub fn new(
-//         pp: &PublicParams,
-//         one: S::Statement,
-//         two: S::Statement,
-//         // three: S::Statement,
-//         // four: S::Statement,
-//     ) -> Self {
-//         StackedStatement {
-//             pp: pp.clone(),
-//             one,
-//             two,
-//         }
-//     }
+    pub fn bound_statement(&self, binding: &BindingIndex) -> &S::Statement {
+        &self.statements[binding.index()]
+    }
 
-//     fn one(&self) -> &S::Statement {
-//         &self.one
-//     }
+    pub fn statement_at(&self, index: usize) -> &S::Statement {
+        &self.statements[index]
+    }
+}
 
-//     fn two(&self) -> &S::Statement {
-//         &self.two
-//     }
+#[derive(Debug, PartialEq)]
+pub struct StackedWitness<W> {
+    nested_witness: W,
+    binding: BindingIndex,
+}
 
-//     pub fn bound_statement(&self, binding: &Side) ->
-// &S::Statement {         match binding {
-//             Side::One => return self.one(),
-//             Side::Two => return self.two(),
-//         }
-//     }
+impl<W> StackedWitness<W> {
+    pub fn init(nested_witness: W, binding: BindingIndex) -> Self {
+        StackedWitness {
+            nested_witness,
+            binding,
+        }
+    }
+}
 
-//     // fn three(&self) -> &S::Statement {
-//     //     &self.three
-//     // }
+#[derive(Clone, PartialEq)]
+pub struct StackedZ<S: Stackable> {
+    ck: CommitKey,
+    message: S::MessageZ,
+    aux: Randomness,
+}
 
-//     // fn four(&self) -> &S::Statement {
-//     //     &self.four
-//     // }
+impl<S: Stackable> StackedZ<S> {
+    pub fn new(ck: CommitKey, message: S::MessageZ, aux: Randomness) -> Self {
+        StackedZ { ck, message, aux }
+    }
 
-//     // pub fn bound_statement(&self, binding: &Binding)
-// ->     // &S::Statement {     let Binding { outer, inner
-// } =     // binding;
+    pub fn ck(&self) -> &CommitKey {
+        &self.ck
+    }
 
-//     //     if outer.is_some() {
-//     //         let outer = outer.unwrap();
-//     //         match (inner, outer) {
-//     //             (Side::One, Side::One) => return
-// self.one(),     //             (Side::Two, Side::One) =>
-// return self.two(),     //             (Side::One,
-// Side::Two) => return     // self.three(),
-// (Side::Two, Side::Two) =>     // return self.four(),
-// }     //     } else {
-//     //         match inner {
-//     //             Side::One => return self.one(),
-//     //             Side::Two => return self.two(),
-//     //         }
-//     //     }
-//     // }
-// }
+    pub fn message(&self) -> &S::MessageZ {
+        &self.message
+    }
 
-// #[derive(Debug, PartialEq)]
-// pub struct StackedWitness<W> {
-//     nested_witness: W,
-//     binding: Side,
-// }
+    pub fn aux(&self) -> &Randomness {
+        &self.aux
+    }
+}
 
-// impl<W> StackedWitness<W> {
-//     pub fn init(nested_witness: W, binding: Side) -> Self
-// {         StackedWitness {
-//             nested_witness,
-//             binding,
-//         }
-//     }
-// }
+impl<S: Stackable> fmt::Debug for StackedZ<S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StackedZ")
+            .field("ck (CommitKey)", &self.ck)
+            .field("z (MessageZ)", &self.message)
+            .field("r (Scalar)", &self.aux)
+            .finish()
+    }
+}
 
-// #[derive(PartialEq)]
-// pub struct StackedZ<S: Stackable> {
-//     ck: CommitKey,
-//     message: S::MessageZ,
-//     aux: Randomness,
-// }
+impl<S: Stackable> Default for StackedZ<S> {
+    fn default() -> Self {
+        StackedZ {
+            ck: CommitKey::default(),
+            message: S::MessageZ::default(),
+            aux: Randomness::random(&mut ChaCha20Rng::from_entropy(), 1),
+        }
+    }
+}
 
-// impl<S: Stackable> fmt::Debug for StackedZ<S> {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) ->
-// fmt::Result {         f.debug_struct("StackedZ")
-//             .field("ck (CommitKey)", &self.ck)
-//             .field("z (MessageZ)", &self.message)
-//             .field("r (Scalar)", &self.aux)
-//             .finish()
-//     }
-// }
+impl<S: Stackable> Message for StackedZ<S> {
+    fn write<W: Write>(&self, writer: &mut W) {
+        self.ck
+            .write(writer);
+        self.message
+            .write(writer);
+    }
+}
 
-// impl<S: Stackable> Default for StackedZ<S> {
-//     fn default() -> Self {
-//         StackedZ {
-//             ck: CommitKey::default(),
-//             message: S::MessageZ::default(),
-//             aux: Randomness::random(&mut
-// ChaCha20Rng::from_entropy()),         }
-//     }
-// }
+#[derive(Debug, PartialEq)]
+pub struct StackedState<S: Stackable> {
+    nested_state: S::State,
+    bound_message: Rc<S::MessageA>,
+    initial_messages: Vec<Rc<S::MessageA>>,
+    ck: CommitKey,
+    ek: EquivKey,
+    aux: Randomness,
+}
 
-// impl<S: Stackable> Message for StackedZ<S> {
-//     fn write<W: Write>(&self, writer: &mut W) {
-//         self.ck
-//             .write(writer);
-//         self.message
-//             .write(writer);
-//     }
-// }
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct StackedA(CommitKey, Commitment);
 
-// #[derive(Debug, PartialEq)]
-// pub struct StackedState<S: Stackable> {
-//     nested_state: S::State,
-//     message: S::MessageA,
-//     ck: CommitKey,
-//     ek: EquivKey,
-//     aux: Randomness,
-// }
+impl Message for StackedA {
+    fn write<W: Write>(&self, writer: &mut W) {
+        self.0
+            .write(writer);
+        self.1
+            .write(writer);
+    }
+}
 
-// #[derive(Debug, Default, PartialEq)]
-// pub struct StackedA(CommitKey, Commitment);
+#[derive(Clone, Debug)]
+pub struct SelfStacker<S: Stackable> {
+    clauses: usize, // number of clauses being composed
+    base: S,
+    q: usize,
+}
 
-// impl Message for StackedA {
-//     fn write<W: Write>(&self, writer: &mut W) {
-//         self.0
-//             .write(writer);
-//         self.1
-//             .write(writer);
-//     }
-// }
+impl<S: Stackable> SelfStacker<S> {
+    pub fn new(clauses: usize, base: S) -> Self {
+        assert!(clauses > 1);
+        let q = clauses
+            .to_be_bytes()
+            .len();
 
-// impl<S: Stackable> Stackable for SelfStacker<S> {
-//     // type CommScheme = HalfBinding;
-//     const CLAUSES: usize = S::CLAUSES * 2;
-// }
+        SelfStacker {
+            clauses: 1 << q,
+            base,
+            q,
+        }
+    }
 
-// impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
-//     type Statement = StackedStatement<S>;
-//     type Witness = StackedWitness<S::Witness>;
-//     type State = StackedState<S>;
-//     type MessageA = StackedA;
-//     type Challenge = S::Challenge;
-//     type MessageZ = StackedZ<S>;
-//     type ProverContext = S::ProverContext;
+    pub fn initial_messages(clauses: usize) -> Vec<Rc<S::MessageA>> {
+        let default = Rc::new(S::MessageA::default());
+        (0..clauses)
+            .map(|_| default.clone())
+            .collect()
+    }
+}
 
-//     fn first<R: CryptoRngCore>(
-//         statement: &StackedStatement<S>,
-//         witness: &StackedWitness<S::Witness>,
-//         prover_rng: &mut R, /* TODO: Check if we need to
-// split
-//                              * it as mentioned in
-//                              * the paper */
-//         prover_context: &S::ProverContext,
-//     ) -> (Self::State, Self::MessageA) {
-//         let StackedWitness {
-//             nested_witness,
-//             binding,
-//         } = witness;
+impl<S: Stackable> Stackable for SelfStacker<S> {}
 
-//         let (nested_state, message) = S::first(
-//             statement.bound_statement(binding),
-//             nested_witness,
-//             prover_rng,
-//             prover_context,
-//         );
+impl<S: Stackable> EHVzk for SelfStacker<S> {
+    fn simulate(
+        // precom: &S::Precompute,
+        statement: &StackedStatement<S>,
+        challenge: &S::Challenge,
+        z: &StackedZ<S>,
+    ) -> Self::MessageA {
+        let v: Vec<Rc<S::MessageA>> = statement
+            .statements()
+            .iter()
+            .map(|s| Rc::new(S::simulate(s, challenge, z.message())))
+            .collect();
 
-//         // We appear to reuse the same prover_rng but it
-// is mutated         // and thus different. Still, the
-// change is deterministic.         let (ck, ek) =
-//             HalfBinding::gen(&statement.pp,
-// (*binding).into(), prover_rng);
+        let comm = QBinding::new(statement.height()).bind(
+            statement.pp(),
+            z.ck(),
+            &v,
+            z.aux(),
+        );
+        StackedA(
+            z.ck()
+                .clone(),
+            comm,
+        )
+    }
+}
 
-//         // Derive auxiliary value from prover's rng
-//         let aux = Randomness::random(prover_rng);
+impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
+    type Statement = StackedStatement<S>;
+    type Witness = StackedWitness<S::Witness>;
+    type State = StackedState<S>;
+    type MessageA = StackedA;
+    type Challenge = S::Challenge;
+    type MessageZ = StackedZ<S>;
+    type ProverContext = S::ProverContext;
 
-//         let def = &S::MessageA::default();
-//         let v = match binding {
-//             Side::One => (&message, def),
-//             Side::Two => (def, &message),
-//         };
-//         // let v = if binding
-//         //     .outer
-//         //     .is_some()
-//         // {
-//         //     let binding_index: BindingIndex =
-// (*binding).into();         //     match binding_index {
-//         //         BindingIndex::One => (&message, def,
-// def, def),         //         BindingIndex::Two => (def,
-// &message, def, def),         //
-// BindingIndex::Three => (def, def, &message, def),
-//         //         BindingIndex::Four => (def, def, def,
-// &message),         //     }
-//         // } else {
-//         //     match binding.inner {
-//         //         Side::One => (&message, def, def,
-// def),         //         Side::Two => (def, &message,
-// def, def),         //     }
-//         // };
+    fn first<R: CryptoRngCore>(
+        statement: &StackedStatement<S>,
+        witness: &StackedWitness<S::Witness>,
+        prover_rng: &mut R,
+        prover_context: &S::ProverContext,
+    ) -> (Self::State, Self::MessageA) {
+        let StackedWitness {
+            nested_witness,
+            binding,
+        } = witness;
 
-//         let (comm, aux) =
-//             HalfBinding::equivcom(&statement.pp, &ek, v,
-// Some(aux));         (
-//             StackedState {
-//                 nested_state,
-//                 message,
-//                 ck,
-//                 ek,
-//                 aux,
-//             },
-//             StackedA(ck, comm),
-//         )
-//     }
+        let (nested_state, bound_message) = S::first(
+            statement.bound_statement(binding),
+            nested_witness,
+            prover_rng,
+            prover_context,
+        );
+        // Instance of partial binding commitment scheme that we
+        // will use
+        let q = statement.height();
+        let qbinding = QBinding::new(q); // TODO: test height
+        let bound_message = Rc::new(bound_message);
 
-//     fn second<R: CryptoRngCore>(verifier_rng: &mut R) ->
-// Self::Challenge     where
-//         Self: Sized,
-//     {
-//         let mut buffer = [0u8; 64];
-//         verifier_rng.fill_bytes(&mut buffer);
-//         Challenge::new(&buffer)
-//     }
+        // Determine our message vector
+        let def = Rc::new(S::MessageA::default());
+        let initial_messages: Vec<Rc<S::MessageA>> = (0..statement.clauses())
+            .map(|i| {
+                if i == binding.index() {
+                    bound_message.clone()
+                } else {
+                    def.clone()
+                }
+            })
+            .collect();
 
-//     fn third<R: CryptoRngCore>(
-//         statement: &Self::Statement,
+        // Here we compute commitment key and equivocation key for
+        // the protocol. We appear to reuse the same
+        // prover_rng but it is mutated and thus different.
+        // Still, the change is deterministic.
+        let (ck, ek) = qbinding.gen(&statement.pp, *binding, prover_rng);
 
-//         state: &Self::State,
-//         witness: &Self::Witness,
-//         challenge: &Self::Challenge,
-//         prover_rng: &mut R,
-//         prover_context: &S::ProverContext,
-//     ) -> Self::MessageZ {
-//         let StackedState {
-//             nested_state,
-//             message: a,
-//             ck,
-//             ek,
-//             aux,
-//         } = state;
+        // Derive auxiliary value from prover's rng
+        let aux = Randomness::random(prover_rng, q);
+        // Compute commitment
+        let (comm, aux) =
+            qbinding.equivcom(&statement.pp, &ek, &initial_messages, Some(aux));
 
-//         let StackedWitness {
-//             nested_witness,
-//             binding,
-//         } = witness;
-//         // let binding_index: BindingIndex =
-// (*binding).into();
+        (
+            StackedState {
+                nested_state,
+                bound_message,
+                initial_messages,
+                ck: ck.clone(),
+                ek,
+                aux,
+            },
+            StackedA(ck, comm),
+        )
+    }
 
-//         let nested_z = S::third(
-//             statement.bound_statement(binding),
-//             nested_state,
-//             nested_witness,
-//             challenge,
-//             prover_rng,
-//             prover_context,
-//         );
+    fn second<R: CryptoRngCore>(verifier_rng: &mut R) -> Self::Challenge
+    where
+        Self: Sized,
+    {
+        let mut buffer = [0u8; 64];
+        verifier_rng.fill_bytes(&mut buffer);
+        Challenge::new(&buffer)
+    }
 
-//         let def = &S::MessageA::default();
-//         let v_old = match binding {
-//             Side::One => (a, def),
-//             Side::Two => (def, a),
-//         };
-//         // let v_old = match binding_index {
-//         //     BindingIndex::One => (a, def, def, def),
-//         //     BindingIndex::Two => (def, a, def, def),
-//         //     BindingIndex::Three => (def, def, a, def),
-//         //     BindingIndex::Four => (def, def, def, a),
-//         // };
+    fn third<R: CryptoRngCore>(
+        statement: &Self::Statement,
+        state: Self::State,
+        witness: &Self::Witness,
+        challenge: &Self::Challenge,
+        prover_rng: &mut R,
+        prover_context: &S::ProverContext,
+    ) -> Self::MessageZ {
+        let StackedState {
+            nested_state,
+            bound_message,
+            initial_messages,
+            ck,
+            ek,
+            aux,
+        } = state;
 
-//         let one = || S::simulate(statement.one(),
-// challenge, &nested_z);         let two = ||
-// S::simulate(statement.two(), challenge, &nested_z);
-//         // let three = || S::simulate(statement.three(),
-// challenge,         // &nested_z); let four = ||
-//         // S::simulate(statement.four(), challenge,
-// &nested_z);         let temp = match binding {
-//             Side::One => two(),
-//             Side::Two => one(),
-//         };
-//         let v = match binding {
-//             Side::One => (a, &temp),
-//             Side::Two => (&temp, a),
-//         };
-//         // let temp = match binding_index {
-//         //     BindingIndex::One => (two(), three(),
-// four()),         //     BindingIndex::Two => (one(),
-// three(), four()),         //     BindingIndex::Three =>
-// (one(), two(), four()),         //     BindingIndex::Four
-// => (one(), two(), three()),         // };
+        let StackedWitness {
+            nested_witness,
+            binding,
+        } = witness;
+        let qbinding = QBinding::new(statement.height());
 
-//         // let v = match binding_index {
-//         //     BindingIndex::One => (a, &temp.0, &temp.1,
-// &temp.2),         //     BindingIndex::Two => (&temp.0,
-// a, &temp.1, &temp.2),         //     BindingIndex::Three
-// => (&temp.0, &temp.1, a,         // &temp.2),
-// BindingIndex::Four => (&temp.0,         // &temp.1,
-// &temp.2, a), };
+        let nested_z = S::third(
+            statement.bound_statement(binding),
+            nested_state,
+            nested_witness,
+            challenge,
+            prover_rng,
+            prover_context,
+        );
 
-//         let aux_new = HalfBinding::equiv(&statement.pp,
-// ek, v_old, v, aux);         StackedZ {
-//             ck: *ck,
-//             message: nested_z,
-//             aux: aux_new,
-//         }
-//     }
+        let new_messages: Vec<Rc<S::MessageA>> = (0..statement.clauses())
+            .map(|i| {
+                if i == binding.index() {
+                    bound_message.clone()
+                } else {
+                    Rc::new(S::simulate(
+                        statement.statement_at(i),
+                        challenge,
+                        &nested_z,
+                    ))
+                }
+            })
+            .collect();
 
-//     fn verify(
-//         statement: &Self::Statement,
-//         a: &Self::MessageA,
-//         c: &Self::Challenge,
-//         z: &Self::MessageZ,
-//     ) -> bool
-//     where
-//         Self: Sized,
-//     {
-//         let StackedA(ck_a, comm) = a;
-//         let StackedZ {
-//             ck: ck_z,
-//             message,
-//             aux,
-//         } = z;
-//         let v = (
-//             &S::simulate(statement.one(), c, &message),
-//             &S::simulate(statement.two(), c, &message),
-//         );
+        let aux_new = qbinding.equiv(
+            &statement.pp,
+            &ek,
+            &initial_messages,
+            &new_messages,
+            &aux,
+        );
+        StackedZ {
+            ck,
+            message: nested_z,
+            aux: aux_new,
+        }
+    }
 
-//         let comm_check = HalfBinding::bind(&statement.pp,
-// *ck_a, v, *aux);         let nested_check =
-// S::verify(statement.one(), v.0, c, &message)             
-// && S::verify(statement.two(), v.1, c, &message);
+    fn verify(
+        statement: &Self::Statement,
+        a: &Self::MessageA,
+        c: &Self::Challenge,
+        z: &Self::MessageZ,
+    ) -> bool
+    where
+        Self: Sized,
+    {
+        let StackedA(ck_a, comm) = a;
+        let StackedZ {
+            ck: ck_z,
+            message,
+            aux,
+        } = z;
 
-//         ck_a == ck_z && *comm == comm_check &&
-// nested_check     }
-// }
+        let v: Vec<Rc<S::MessageA>> = statement
+            .statements()
+            .iter()
+            .map(|s| Rc::new(S::simulate(s, c, &message)))
+            .collect();
 
-// impl<S: Stackable> EHVzk for SelfStacker<S> {
-//     fn simulate(
-//         // precom: &S::Precompute,
-//         statement: &StackedStatement<S>,
-//         challenge: &S::Challenge,
-//         z: &StackedZ<S>,
-//     ) -> Self::MessageA {
-//         let one = S::simulate(statement.one(), challenge,
-// &z.message);         let two =
-// S::simulate(statement.two(), challenge, &z.message);
-//         // let three = S::simulate(statement.three(),
-// challenge,         // &z.message); let four =
-//         // S::simulate(statement.four(), challenge,
-// &z.message);
+        let comm_check = QBinding::new(statement.height()).bind(
+            &statement.pp,
+            ck_a,
+            &v,
+            aux,
+        );
+        let nested_check = statement
+            .statements()
+            .iter()
+            .zip(v.iter())
+            .all(|(s, m)| S::verify(s, m, c, &message));
 
-//         let comm = HalfBinding::bind(&statement.pp, z.ck,
-// (&one, &two), z.aux);         StackedA(z.ck, comm)
-//     }
-// }
+        ck_a == ck_z && *comm == comm_check && nested_check
+    }
+}

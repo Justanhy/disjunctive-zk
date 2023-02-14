@@ -15,7 +15,7 @@ use rand_core::{CryptoRngCore, SeedableRng};
 use crate::stackable::Message;
 use crate::util::hash;
 
-use super::comm::PartialBindingCommScheme;
+pub use crate::commitment_scheme::comm::PartialBindingCommScheme;
 
 /// 1 out of 2 commitment scheme
 pub struct HalfBinding;

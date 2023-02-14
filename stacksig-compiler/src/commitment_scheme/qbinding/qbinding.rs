@@ -3,7 +3,7 @@
 //! schemes
 use std::rc::Rc;
 
-use crate::commitment_scheme::comm::PartialBindingCommScheme;
+pub use crate::commitment_scheme::comm::PartialBindingCommScheme;
 use crate::commitment_scheme::halfbinding::{Commitment, HalfBinding};
 
 use super::*;

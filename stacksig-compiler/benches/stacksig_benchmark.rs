@@ -1,184 +1,192 @@
+use std::fmt::Display;
+
 use criterion::{
-    black_box, criterion_group, criterion_main, Bencher, BenchmarkId, Criterion,
+    criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
 };
-
-use stacksig_compiler::{compiler::*, fiat, schnorr, Side};
-
-use rand_core::OsRng;
-
-use curve25519_dalek::constants::RISTRETTO_BASEPOINT_TABLE;
-use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
+use sigmazk::SigmaProtocol;
+use stacksig_compiler::stackable::schnorr::Schnorr;
+use stacksig_compiler::stackers::*;
 
-type S2 = Compiled<schnorr::Schnorr>;
-type S4 = Compiled<S2>;
-type S8 = Compiled<S4>;
-type S16 = Compiled<S8>;
-type S32 = Compiled<S16>;
-type S64 = Compiled<S32>;
-type S128 = Compiled<S64>;
-type S256 = Compiled<S128>;
-type S512 = Compiled<S256>;
-type S1024 = Compiled<S512>;
-type S2048 = Compiled<S1024>;
-type S4096 = Compiled<S2048>;
-
-pub type Sig2 = fiat::SignatureScheme<S2>;
-pub type Sig4 = fiat::SignatureScheme<S4>;
-pub type Sig8 = fiat::SignatureScheme<S8>;
-pub type Sig16 = fiat::SignatureScheme<S16>;
-pub type Sig32 = fiat::SignatureScheme<S32>;
-pub type Sig64 = fiat::SignatureScheme<S64>;
-pub type Sig128 = fiat::SignatureScheme<S128>;
-pub type Sig256 = fiat::SignatureScheme<S256>;
-pub type Sig512 = fiat::SignatureScheme<S512>;
-pub type Sig1024 = fiat::SignatureScheme<S1024>;
-pub type Sig2048 = fiat::SignatureScheme<S2048>;
-pub type Sig4096 = fiat::SignatureScheme<S4096>;
-
-macro_rules! compile {
-    ($pks:expr, $sk:expr) => {{
-        let sk = CompiledWitness::new($sk, Side::Left); // for benchmarking the signer is always the left-most key
-        let len = $pks.len() / 2;
-        let mut pk: Vec<_> = Vec::with_capacity(len);
-        let mut pks = $pks.into_iter();
-        for _ in 0..len {
-            let l = pks.next().unwrap();
-            let r = pks.next().unwrap();
-            pk.push(CompiledStatement::new(l, r));
-        }
-        (pk, sk)
-    }};
+#[allow(dead_code)]
+pub struct StackerBench {
+    actual_witness: Scalar,
+    provers_witness: Scalar,
+    base_schnorr: Schnorr,
+    s2_statement: StackedStatement<Schnorr>,
+    valid_witness: StackedWitness<Scalar>,
+    s2_witness: StackedWitness<Scalar>,
 }
 
-macro_rules! compilen {
-    (1, $pks:expr, $sk:expr) => {{
-        compile!($pks, $sk)
-    }};
-    (2, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(1, pk, sk)
-    }};
-    (3, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(2, pk, sk)
-    }};
-    (4, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(3, pk, sk)
-    }};
-    (5, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(4, pk, sk)
-    }};
-    (6, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(5, pk, sk)
-    }};
-    (7, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(6, pk, sk)
-    }};
-    (8, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(7, pk, sk)
-    }};
-    (9, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(8, pk, sk)
-    }};
-    (10, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(9, pk, sk)
-    }};
-    (11, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(10, pk, sk)
-    }};
-    (12, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(11, pk, sk)
-    }};
+fn bench_init(
+    rng: &mut ChaCha20Rng,
+    clauses: usize,
+    binding_index: usize,
+) -> StackerBench {
+    assert!(clauses > 1);
+    assert!(binding_index > 0 && binding_index < clauses);
+
+    // Handle witness
+    let actual_witness = Scalar::from_bits([0u8; 32]);
+    let provers_witness = Scalar::from_bits([0u8; 32]);
+    // Initialise base sigma + remaining sigma instances
+    let base_schnorr = Schnorr::init(actual_witness);
+    let dummy_schnorr =
+        Schnorr::init(Scalar::random(&mut ChaCha20Rng::from_entropy()));
+
+    // Initialise stacked sigma protocol
+    let stackedsigma = SelfStacker::new(clauses, base_schnorr);
+    // Setup public parameters
+    let (qbinding, binding_index) =
+        QBinding::init(stackedsigma.q(), binding_index);
+    let pp = qbinding.setup(rng);
+
+    // Setup vector of statements and stacked statement
+    let mut statements: Vec<Schnorr> =
+        vec![dummy_schnorr; stackedsigma.clauses()]; // TODO: Might cause stackoverflow
+    statements[binding_index.index()] = base_schnorr;
+    let s2_statement: StackedStatement<Schnorr> =
+        StackedStatement::new(pp, stackedsigma.q(), statements);
+
+    // Setup stacked witness
+    let s2_witness: StackedWitness<Scalar> =
+        StackedWitness::init(provers_witness, binding_index);
+    let valid_witness: StackedWitness<Scalar> =
+        StackedWitness::init(actual_witness, binding_index);
+
+    StackerBench {
+        actual_witness,
+        provers_witness,
+        base_schnorr,
+        s2_statement,
+        valid_witness,
+        s2_witness,
+    }
 }
 
-macro_rules! bench_scheme {
-    ($b:expr, $n:tt, $s:tt) => {{
-        let sk = Scalar::random(&mut OsRng);
-        let mut pk: Vec<RistrettoPoint> = Vec::with_capacity(1 << $n);
-        pk.push(&sk * RISTRETTO_BASEPOINT_TABLE);
-        for _ in 1..(1 << $n) {
-            pk.push(&Scalar::random(&mut OsRng) * RISTRETTO_BASEPOINT_TABLE);
-        }
-        let (pk, sk) = compilen!($n, pk, sk);
-        $b.iter(|| {
-            $s::sign(&mut OsRng, &sk, &pk[0], &[]);
-        });
-    }};
+struct ProverBenchParam {
+    pub statement: StackedStatement<Schnorr>,
+    pub witness: StackedWitness<Scalar>,
+    pub challenge: Scalar,
+    pub rng: ChaCha20Rng,
 }
 
-fn bench_sig2(b: &mut Bencher) {
-    bench_scheme!(b, 1, Sig2);
+impl Display for ProverBenchParam {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ProverBenchParam {{
+                statement: {:#},
+                witness: {:#?},
+                challenge: {:?},
+                rng: ChaCha20Rng
+            }}",
+            self.statement, self.witness, self.challenge
+        )
+    }
 }
 
-fn bench_sig4(b: &mut Bencher) {
-    bench_scheme!(b, 2, Sig4);
+struct VerifierBenchParam {
+    pub statement: StackedStatement<Schnorr>,
+    pub message_a: StackedA,
+    pub message_z: StackedZ<Schnorr>,
+    pub challenge: Scalar,
 }
 
-fn bench_sig8(b: &mut Bencher) {
-    bench_scheme!(b, 3, Sig8);
-}
-
-fn bench_sig16(b: &mut Bencher) {
-    bench_scheme!(b, 4, Sig16);
-}
-
-fn bench_sig32(b: &mut Bencher) {
-    bench_scheme!(b, 5, Sig32);
-}
-
-fn bench_sig64(b: &mut Bencher) {
-    bench_scheme!(b, 6, Sig64);
-}
-
-fn bench_sig128(b: &mut Bencher) {
-    bench_scheme!(b, 7, Sig128);
-}
-
-fn bench_sig256(b: &mut Bencher) {
-    bench_scheme!(b, 8, Sig256);
-}
-
-fn bench_sig512(b: &mut Bencher) {
-    bench_scheme!(b, 9, Sig512);
-}
-
-fn bench_sig1024(b: &mut Bencher) {
-    bench_scheme!(b, 10, Sig1024);
-}
-
-fn bench_sig2048(b: &mut Bencher) {
-    bench_scheme!(b, 11, Sig2048);
-}
-
-fn bench_sig4096(b: &mut Bencher) {
-    bench_scheme!(b, 12, Sig4096);
+impl Display for VerifierBenchParam {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "VerifierBenchParam {{
+                message_a: {:?},
+                message_z: {:?},
+                challenge: {:?}
+            }}",
+            self.message_a, self.message_z, self.challenge
+        )
+    }
 }
 
 pub fn stacksig_benchmark(c: &mut Criterion) {
-    let mut group = c.benchmark_group("stacksig");
-    group.bench_function("sig2", bench_sig2);
-    group.bench_function("sig4", bench_sig4);
-    group.bench_function("sig8", bench_sig8);
-    group.bench_function("sig16", bench_sig16);
-    group.bench_function("sig32", bench_sig32);
-    group.bench_function("sig64", bench_sig64);
-    group.bench_function("sig128", bench_sig128);
-    group.bench_function("sig256", bench_sig256);
-    group.bench_function("sig512", bench_sig512);
-    group.bench_function("sig1024", bench_sig1024);
-    group.bench_function("sig2048", bench_sig2048);
-    group.bench_function("sig4096", bench_sig4096);
-    group.finish();
+    const N: usize = 12;
+    let mut ns: [usize; N - 1] = [0; N - 1];
+    for i in 2..=N {
+        ns[i - 2] = 1 << i;
+    }
+    const BINDING: usize = 1;
+
+    let mut group = c.benchmark_group("stacksig_benchmark");
+    for n in ns.into_iter() {
+        let StackerBench {
+            s2_statement,
+            s2_witness,
+            ..
+        } = bench_init(&mut ChaCha20Rng::from_entropy(), n, BINDING);
+
+        let rng = ChaCha20Rng::from_entropy();
+        let challenge =
+            SelfStacker::<Schnorr>::second(&mut ChaCha20Rng::from_entropy());
+        let mut prover_params: ProverBenchParam = ProverBenchParam {
+            statement: s2_statement,
+            witness: s2_witness,
+            challenge,
+            rng,
+        };
+
+        let mut message_z: StackedZ<Schnorr> = StackedZ::default();
+        let mut message_a: StackedA = StackedA::default();
+
+        group.throughput(Throughput::Elements(n as u64));
+        // Benchmark the prover
+        group.bench_with_input(
+            BenchmarkId::new("prover_bench", &prover_params),
+            &mut prover_params,
+            |b, p| {
+                b.iter(|| {
+                    let rng = &mut p
+                        .rng
+                        .clone();
+                    let (state, a) =
+                        SelfStacker::first(&p.statement, &p.witness, rng, &());
+                    let z = SelfStacker::third(
+                        &p.statement,
+                        state,
+                        &p.witness,
+                        &p.challenge,
+                        rng,
+                        &(),
+                    );
+                    message_a = a;
+                    message_z = z;
+                });
+            },
+        );
+
+        let mut verifier_params = VerifierBenchParam {
+            statement: prover_params.statement,
+            message_a,
+            message_z,
+            challenge,
+        };
+
+        // Benchmark the verifier
+        group.bench_with_input(
+            BenchmarkId::new("verifier_bench", &verifier_params),
+            &mut verifier_params,
+            |b, p| {
+                b.iter(|| {
+                    SelfStacker::<Schnorr>::verify(
+                        &p.statement,
+                        &p.message_a,
+                        &p.challenge,
+                        &p.message_z,
+                    )
+                });
+            },
+        );
+    }
 }
 
 criterion_group!(benches, stacksig_benchmark);

@@ -2,6 +2,7 @@ pub mod inner_outer;
 pub mod qbinding;
 #[cfg(test)]
 mod tests;
+use core::fmt;
 use std::io::Write;
 
 use inner_outer::*;
@@ -19,6 +20,20 @@ pub struct BindingIndex {
     q: usize,
     length: usize,
     index: usize, // 0-indexed
+}
+
+impl fmt::Display for BindingIndex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "BindingIndex {{ 
+                q: {}, 
+                length: {}, 
+                index: {} 
+            }}",
+            self.q, self.length, self.index
+        )
+    }
 }
 
 impl BindingIndex {

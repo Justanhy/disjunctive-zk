@@ -12,7 +12,14 @@ use rand_chacha::ChaCha20Rng;
 use rand_core::SeedableRng;
 use sigmazk::*;
 
-fn bench_init(n: usize, d: usize) -> CDS94Test {
+struct CDS94Benchmark {
+    protocol: CDS94,
+    cdsprover: CDS94Prover,
+    cdsverifier: CDS94Verifier,
+    active_clauses: Vec<bool>,
+}
+
+fn bench_init(n: usize, d: usize) -> CDS94Benchmark {
     // INIT //
     assert!(d <= n);
     // closure to generate random witnesses
@@ -62,17 +69,12 @@ fn bench_init(n: usize, d: usize) -> CDS94Test {
 
     let verifier: CDS94Verifier = CDS94Verifier::new();
 
-    (
+    CDS94Benchmark {
         protocol,
-        prover,
-        verifier,
-        protocols,
-        provers,
-        verifiers,
-        actual_witnesses,
-        provers_witnesses,
+        cdsprover: prover,
+        cdsverifier: verifier,
         active_clauses,
-    )
+    }
 }
 
 fn prover(
@@ -98,37 +100,40 @@ fn prover(
     (commitments, proof)
 }
 
-struct ProverBenchParam(CDS94, CDS94Prover, Vec<bool>, Scalar);
+struct ProverBenchParam {
+    protocol: CDS94,
+    prover: CDS94Prover,
+    active_clauses: Vec<bool>,
+    challenge: Scalar,
+}
 
 impl fmt::Display for ProverBenchParam {
     /// Implementation of Display for the Benchmark
     /// parameters given to the CDS94 prover
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.protocol)
     }
 }
 
-fn verifier(verifier_params: &VerifierBenchParam) -> bool {
-    CDS94::verify(
-        &verifier_params.0,
-        &verifier_params.1,
-        &verifier_params.2,
-        &verifier_params.3,
-    )
+struct VerifierBenchParam {
+    pub statement: CDS94,
+    pub message_a: Vec<CompressedRistretto>,
+    pub challenge: Scalar,
+    pub message_z: Vec<(Scalar, Scalar)>,
 }
-
-struct VerifierBenchParam(
-    CDS94,
-    Vec<CompressedRistretto>,
-    Scalar,
-    Vec<(Scalar, Scalar)>,
-);
 
 impl fmt::Display for VerifierBenchParam {
     /// Implementation of Display for the Benchmark
     /// parameters given to the CDS94 Verifier
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(
+            f,
+            "clauses: {}, threshold: {}",
+            self.statement
+                .n,
+            self.statement
+                .threshold
+        )
     }
 }
 
@@ -142,52 +147,80 @@ pub fn cds94_benchmark(c: &mut Criterion) {
         .into_iter()
         .enumerate()
     {
-        let (
+        let CDS94Benchmark {
             protocol,
             cdsprover,
             cdsverifier,
-            _protocols,
-            _provers,
-            _verifiers,
-            _actual_witnesses,
-            _provers_witnesses,
             active_clauses,
-        ) = bench_init(n, 1);
+        } = bench_init(n, 1);
 
         let challenge = Scalar::random(&mut cdsverifier.get_rng());
 
-        let mut proverparams: ProverBenchParam = ProverBenchParam(
-            protocol.clone(),
-            cdsprover,
+        let mut proverparams: ProverBenchParam = ProverBenchParam {
+            protocol: protocol.clone(),
+            prover: cdsprover,
             active_clauses,
             challenge,
-        );
+        };
+
         group.throughput(Throughput::Bytes((n * 32 + n * 64 + 32) as u64));
         group.measurement_time(Duration::from_secs(10));
+
+        let mut message_a: Vec<CompressedRistretto> = Vec::new();
+        let mut message_z: Vec<(Scalar, Scalar)> = Vec::new();
+
         group.bench_with_input(
             BenchmarkId::new("prover_bench", &proverparams),
             &mut proverparams,
             |b, s| {
                 b.iter(|| {
-                    prover(s.0.clone(), s.1.clone(), s.2.clone(), s.3.clone())
+                    let (transcripts, commitments) = CDS94::first(
+                        &s.protocol,
+                        s.prover
+                            .borrow_witnesses(),
+                        &mut s
+                            .prover
+                            .get_rng(),
+                        &s.active_clauses,
+                    );
+                    let proof = CDS94::third(
+                        &s.protocol,
+                        transcripts,
+                        s.prover
+                            .borrow_witnesses(),
+                        &s.challenge,
+                        &mut s
+                            .prover
+                            .get_rng(),
+                        &s.active_clauses,
+                    );
+                    // Should have negligible cost
+                    message_a = commitments;
+                    message_z = proof;
                 })
             },
         );
 
-        let (commitment, proof) = prover(
-            proverparams.0,
-            proverparams.1,
-            proverparams.2,
-            proverparams.3,
-        );
-
-        let v_params: VerifierBenchParam =
-            VerifierBenchParam(protocol, commitment, challenge, proof);
+        let v_params: VerifierBenchParam = VerifierBenchParam {
+            statement: protocol,
+            message_a,
+            challenge,
+            message_z,
+        };
 
         group.bench_with_input(
             BenchmarkId::new("verifier_bench", &v_params),
             &v_params,
-            |b, s| b.iter(|| verifier(s)),
+            |b, s| {
+                b.iter(|| {
+                    CDS94::verify(
+                        &s.statement,
+                        &s.message_a,
+                        &s.challenge,
+                        &s.message_z,
+                    )
+                })
+            },
         );
     }
     group.finish();

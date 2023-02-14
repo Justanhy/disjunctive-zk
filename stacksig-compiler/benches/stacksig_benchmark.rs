@@ -77,13 +77,11 @@ impl Display for ProverBenchParam {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "ProverBenchParam {{
-                statement: {:#},
-                witness: {:#?},
-                challenge: {:?},
-                rng: ChaCha20Rng
-            }}",
-            self.statement, self.witness, self.challenge
+            "<q: {}, clauses: {}>",
+            self.statement
+                .height(),
+            self.statement
+                .clauses(),
         )
     }
 }
@@ -99,12 +97,11 @@ impl Display for VerifierBenchParam {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "VerifierBenchParam {{
-                message_a: {:?},
-                message_z: {:?},
-                challenge: {:?}
-            }}",
-            self.message_a, self.message_z, self.challenge
+            "<q: {}, clauses: {}>",
+            self.statement
+                .height(),
+            self.statement
+                .clauses(),
         )
     }
 }
@@ -158,6 +155,7 @@ pub fn stacksig_benchmark(c: &mut Criterion) {
                         rng,
                         &(),
                     );
+                    // Should have negligible cost
                     message_a = a;
                     message_z = z;
                 });

@@ -122,7 +122,7 @@ impl SigmaProtocol for Schnorr {
 
     fn third<R: CryptoRngCore>(
         _statement: &Schnorr,
-        _state: &Scalar,
+        _state: Scalar,
         witness: &Scalar,
         challenge: &Scalar,
         prover_rng: &mut R,

@@ -54,7 +54,7 @@ pub trait SigmaProtocol {
     /// Prover).
     fn third<R: CryptoRngCore>(
         statement: &Self::Statement,
-        state: &Self::State,
+        state: Self::State,
         witness: &Self::Witness,
         challenge: &Self::Challenge,
         prover_rng: &mut R,

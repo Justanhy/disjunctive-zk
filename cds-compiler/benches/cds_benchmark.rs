@@ -89,7 +89,7 @@ fn prover(
     );
     let proof = CDS94::third(
         &protocol,
-        &transcripts,
+        transcripts,
         cdsprover.borrow_witnesses(),
         &challenge,
         &mut cdsprover.get_rng(),

@@ -47,7 +47,9 @@ type SigTrans = Box<
 impl SigmaProtocol for CDS94 {
     type Statement = CDS94;
     type Witness = Vec<Scalar>;
-    // type State = Vec<Box<SchnorrTranscript>>; // dyn SigmaTranscript<MessageA = RistrettoPoint, Challenge = Scalar, MessageZ = Scalar>
+    // type State = Vec<Box<SchnorrTranscript>>; // dyn
+    // SigmaTranscript<MessageA = RistrettoPoint, Challenge =
+    // Scalar, MessageZ = Scalar>
     type State = Vec<SigTrans>;
 
     type MessageA = Vec<CompressedRistretto>;
@@ -86,7 +88,8 @@ impl SigmaProtocol for CDS94 {
                 ret
             })
             .collect();
-        // let mut _error: Option<Error> = None; // For error propagation
+        // let mut _error: Option<Error> = None; // For error
+        // propagation
 
         let commitment: Self::MessageA = transcripts
             .iter()
@@ -104,7 +107,7 @@ impl SigmaProtocol for CDS94 {
 
     fn third<R: CryptoRngCore>(
         statement: &Self::Statement,
-        state: &Self::State,
+        state: Self::State,
         witness: &Self::Witness,
         challenge: &Self::Challenge,
         prover_rng: &mut R,
@@ -147,13 +150,16 @@ impl SigmaProtocol for CDS94 {
             }
             if transcript.is_proven() {
                 if active_clauses[i] {
-                    panic!("Transcript should not be proven yet as it is an active clause");
+                    panic!(
+                        "Transcript should not be proven yet as it is an \
+                         active clause"
+                    );
                 }
                 continue;
             } else {
                 let proof = Schnorr::third(
                     &statement.protocols[i],
-                    &Scalar::default(),
+                    Scalar::default(),
                     &witness[i],
                     &transcript
                         .get_challenge()
@@ -169,7 +175,8 @@ impl SigmaProtocol for CDS94 {
             }
         }
 
-        // Return vector of challenges and vector of proofs or a vector of tuples of them
+        // Return vector of challenges and vector of proofs or a
+        // vector of tuples of them
         transcripts
             .iter()
             .map(|t| {

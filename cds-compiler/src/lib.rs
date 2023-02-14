@@ -229,7 +229,7 @@ pub mod tests {
         // Third message
         let proof = CDS94::third(
             &protocol,
-            &transcripts,
+            transcripts,
             cdsprover.borrow_witnesses(),
             &challenge,
             &mut cdsprover.get_rng(),
@@ -269,7 +269,7 @@ pub mod tests {
         // Third message
         let proof = CDS94::third(
             &protocol,
-            &transcripts,
+            transcripts,
             cdsprover.borrow_witnesses(),
             &challenge,
             &mut cdsprover.get_rng(),

@@ -1,5 +1,6 @@
-//! This crate defines traits related to Sigma Protocols and includes an implementation of
-//! Schnorr's identification scheme implementing said traits.
+//! This crate defines traits related to Sigma Protocols and
+//! includes an implementation of Schnorr's identification
+//! scheme implementing said traits.
 extern crate curve25519_dalek_ml as curve25519_dalek;
 extern crate rand;
 extern crate rand_chacha;
@@ -47,7 +48,7 @@ mod tests {
 
         let proof = Schnorr::third(
             &protocol,
-            &state,
+            state,
             &provers_witness,
             &challenge,
             &mut prover.get_rng(),
@@ -81,7 +82,7 @@ mod tests {
 
         let proof = Schnorr::third(
             &protocol,
-            &state,
+            state,
             &provers_witness,
             &challenge,
             &mut prover.get_rng(),

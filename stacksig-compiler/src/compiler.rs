@@ -1,4 +1,6 @@
-use crate::comm::{CommitKey, Commitment, Randomness, Trapdoor};
+use crate::commitment_scheme::rot256::{
+    CommitKey, Commitment, Randomness, Trapdoor,
+};
 use crate::stack::*;
 use crate::Side;
 
@@ -6,7 +8,7 @@ use std::io::Write;
 
 use std::marker::PhantomData;
 
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRngCore;
 
 #[derive(Debug)]
 pub struct Compiled<S: Stackable>(pub PhantomData<S>);
@@ -18,11 +20,24 @@ pub struct CompiledMessageZ<Z: Message> {
     rd: Randomness,
 }
 
+impl<M: Message> Default for CompiledMessageZ<M> {
+    fn default() -> Self {
+        CompiledMessageZ {
+            z: M::default(),
+            ck: CommitKey::default(),
+            rd: Randomness::default(),
+        }
+    }
+}
+
 impl<M: Message> Message for CompiledMessageZ<M> {
     fn write<W: Write>(&self, writer: &mut W) {
-        self.z.write(writer);
-        self.ck.write(writer);
-        self.rd.write(writer);
+        self.z
+            .write(writer);
+        self.ck
+            .write(writer);
+        self.rd
+            .write(writer);
     }
 }
 
@@ -61,35 +76,35 @@ impl<W> CompiledWitness<W> {
     }
 }
 
-// if S is a compiled protocol, could pass PreSim into state check
+// if S is a compiled protocol, could pass PreSim into state
+// check
 
-/*
-impl<S: Stackable> Compiled<S> {
-    fn compile_witness<I: Iterator<Item = Side>>(
-        witness: <S as Stackable>::Witness,
-        path: &mut I,
-    ) -> <Self as Stackable>::Witness {
-        let side = path.next().unwrap();
-
-        if !S::is_leaf() {
-            S::compile_witness()
-        }
-
-        if S::is_leaf() {
-            CompiledWitness { side, witness }
-        } else {
-            unimplemented!()
-        }
-    }
-}
-*/
+// impl<S: Stackable> Compiled<S> {
+// fn compile_witness<I: Iterator<Item = Side>>(
+// witness: <S as Stackable>::Witness,
+// path: &mut I,
+// ) -> <Self as Stackable>::Witness {
+// let side = path.next().unwrap();
+//
+// if !S::is_leaf() {
+// S::compile_witness()
+// }
+//
+// if S::is_leaf() {
+// CompiledWitness { side, witness }
+// } else {
+// unimplemented!()
+// }
+// }
+// }
 
 impl<S: Stackable> Stackable for Compiled<S> {
     type Precompute = S::Precompute;
 
     type State = CompiledState<S::MessageA, S::State>;
 
-    // new witness consists of the old witness and a side: Left/Right
+    // new witness consists of the old witness and a side:
+    // Left/Right
     type Witness = CompiledWitness<S::Witness>;
 
     // new statement is a 2-tuple
@@ -106,7 +121,7 @@ impl<S: Stackable> Stackable for Compiled<S> {
 
     const CLAUSES: usize = 2 * S::CLAUSES;
 
-    fn sigma_a<R: RngCore + CryptoRng>(
+    fn sigma_a<R: CryptoRngCore>(
         rng: &mut R,
         witness: &Self::Witness,
     ) -> (Self::State, Self::MessageA) {
@@ -114,8 +129,12 @@ impl<S: Stackable> Stackable for Compiled<S> {
         let (ck, td) = CommitKey::gen(rng, witness.side);
         let rd = Randomness::random(rng);
         let comm = match witness.side {
-            Side::Left => ck.commit::<S::MessageA, S::MessageA>(&rd, (Some(&a), None)),
-            Side::Right => ck.commit::<S::MessageA, S::MessageA>(&rd, (None, Some(&a))),
+            Side::Left => {
+                ck.commit::<S::MessageA, S::MessageA>(&rd, (Some(&a), None))
+            }
+            Side::Right => {
+                ck.commit::<S::MessageA, S::MessageA>(&rd, (None, Some(&a)))
+            }
         };
 
         // first message is just a commitment
@@ -132,37 +151,65 @@ impl<S: Stackable> Stackable for Compiled<S> {
         let (precomp, z, ck, rd) = match witness.side {
             Side::Left => {
                 // run the real prover on the right
-                let (precomp, z) =
-                    S::sigma_z(statement.left(), &witness.witness, &state.st, challenge);
-
-                // simulate the right side
-                let a_right = S::ehvzk(&precomp, statement.right(), challenge, &z);
-
-                // equivocate on the right side
-                let rd = state.td.equiv(
-                    &state.rd,
-                    (Some(&state.a), None),
-                    (Some(&state.a), Some(&a_right)),
+                let (precomp, z) = S::sigma_z(
+                    statement.left(),
+                    &witness.witness,
+                    &state.st,
+                    challenge,
                 );
 
-                (precomp, z, state.ck.clone(), rd)
+                // simulate the right side
+                let a_right =
+                    S::ehvzk(&precomp, statement.right(), challenge, &z);
+
+                // equivocate on the right side
+                let rd = state
+                    .td
+                    .equiv(
+                        &state.rd,
+                        (Some(&state.a), None),
+                        (Some(&state.a), Some(&a_right)),
+                    );
+
+                (
+                    precomp,
+                    z,
+                    state
+                        .ck
+                        .clone(),
+                    rd,
+                )
             }
             Side::Right => {
                 // run the real prover on the left
-                let (precomp, z) =
-                    S::sigma_z(statement.right(), &witness.witness, &state.st, challenge);
-
-                // simulate the right side
-                let a_left = S::ehvzk(&precomp, statement.left(), challenge, &z);
-
-                // equivocate on the left side
-                let rd = state.td.equiv(
-                    &state.rd,
-                    (None, Some(&state.a)),
-                    (Some(&a_left), Some(&state.a)),
+                let (precomp, z) = S::sigma_z(
+                    statement.right(),
+                    &witness.witness,
+                    &state.st,
+                    challenge,
                 );
 
-                (precomp, z, state.ck.clone(), rd)
+                // simulate the right side
+                let a_left =
+                    S::ehvzk(&precomp, statement.left(), challenge, &z);
+
+                // equivocate on the left side
+                let rd = state
+                    .td
+                    .equiv(
+                        &state.rd,
+                        (None, Some(&state.a)),
+                        (Some(&a_left), Some(&state.a)),
+                    );
+
+                (
+                    precomp,
+                    z,
+                    state
+                        .ck
+                        .clone(),
+                    rd,
+                )
             }
         };
         (precomp, CompiledMessageZ { z, ck, rd })

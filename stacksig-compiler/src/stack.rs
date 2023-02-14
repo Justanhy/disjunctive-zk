@@ -1,8 +1,9 @@
 use rand_core::{CryptoRng, RngCore};
 
+use std::fmt::Debug;
 use std::io::Write;
 
-pub trait Message {
+pub trait Message: Debug + Default {
     fn write<W: Write>(&self, writer: &mut W);
 
     fn size(&self) -> usize {
@@ -12,9 +13,11 @@ pub trait Message {
     }
 }
 
-impl Message for [u8] {
+impl Message for &[u8] {
     fn write<W: Write>(&self, writer: &mut W) {
-        writer.write_all(self).unwrap();
+        writer
+            .write_all(self)
+            .unwrap();
     }
 }
 

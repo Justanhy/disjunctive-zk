@@ -1,15 +1,16 @@
+//! Benchmarking for the CDS94 compiler
 use core::fmt;
 use std::time::Duration;
 
 use cds_compiler::*;
 use criterion::{
-    criterion_group, criterion_main, Bencher, BenchmarkId, Criterion,
+    criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
 };
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use curve25519_dalek::ristretto::CompressedRistretto;
+use curve25519_dalek::scalar::Scalar;
 use rand_chacha::ChaCha20Rng;
 use rand_core::SeedableRng;
-use schnorr::sigma::{SigmaProtocol, SigmaProver, SigmaVerifier};
-use schnorr::*;
+use sigmazk::*;
 
 fn bench_init(n: usize, d: usize) -> CDS94Test {
     // INIT //
@@ -20,7 +21,8 @@ fn bench_init(n: usize, d: usize) -> CDS94Test {
     let actual_witnesses: Vec<Scalar> = (0..n)
         .map(m)
         .collect();
-    // generate the prover's witnesses - for inactive clauses the prover generates a random witness
+    // generate the prover's witnesses - for inactive clauses
+    // the prover generates a random witness
     let provers_witnesses: Vec<Scalar> = actual_witnesses
         .to_owned()
         .iter()
@@ -74,11 +76,11 @@ fn bench_init(n: usize, d: usize) -> CDS94Test {
 }
 
 fn prover(
-    mut protocol: CDS94,
+    protocol: CDS94,
     cdsprover: CDS94Prover,
     active_clauses: Vec<bool>,
     challenge: Scalar,
-) -> (Vec<RistrettoPoint>, Vec<(Scalar, Scalar)>) {
+) -> (Vec<CompressedRistretto>, Vec<(Scalar, Scalar)>) {
     let (transcripts, commitments) = CDS94::first(
         &protocol,
         cdsprover.borrow_witnesses(),
@@ -87,7 +89,7 @@ fn prover(
     );
     let proof = CDS94::third(
         &protocol,
-        &transcripts,
+        transcripts,
         cdsprover.borrow_witnesses(),
         &challenge,
         &mut cdsprover.get_rng(),
@@ -99,7 +101,8 @@ fn prover(
 struct ProverBenchParam(CDS94, CDS94Prover, Vec<bool>, Scalar);
 
 impl fmt::Display for ProverBenchParam {
-    /// Implementation of Display for the Benchmark parameters given to the CDS94 prover
+    /// Implementation of Display for the Benchmark
+    /// parameters given to the CDS94 prover
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -116,23 +119,29 @@ fn verifier(verifier_params: &VerifierBenchParam) -> bool {
 
 struct VerifierBenchParam(
     CDS94,
-    Vec<RistrettoPoint>,
+    Vec<CompressedRistretto>,
     Scalar,
     Vec<(Scalar, Scalar)>,
 );
 
 impl fmt::Display for VerifierBenchParam {
-    /// Implementation of Display for the Benchmark parameters given to the CDS94 Verifier
+    /// Implementation of Display for the Benchmark
+    /// parameters given to the CDS94 Verifier
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
 pub fn cds94_benchmark(c: &mut Criterion) {
-    let ns: [usize; 8] = [2, 4, 8, 16, 32, 64, 128, 255];
+    const N: usize = 8;
+    let ns: [usize; N] = [2, 4, 8, 16, 32, 64, 128, 255];
+    let communication_size: [usize; N] = [0; N];
 
     let mut group = c.benchmark_group("cds94_benchmark");
-    for n in ns.into_iter() {
+    for (_index, n) in ns
+        .into_iter()
+        .enumerate()
+    {
         let (
             protocol,
             cdsprover,
@@ -153,6 +162,7 @@ pub fn cds94_benchmark(c: &mut Criterion) {
             active_clauses,
             challenge,
         );
+        group.throughput(Throughput::Bytes((n * 32 + n * 64 + 32) as u64));
         group.measurement_time(Duration::from_secs(10));
         group.bench_with_input(
             BenchmarkId::new("prover_bench", &proverparams),
@@ -179,6 +189,14 @@ pub fn cds94_benchmark(c: &mut Criterion) {
             &v_params,
             |b, s| b.iter(|| verifier(s)),
         );
+    }
+    group.finish();
+    let mut group = c.benchmark_group("cds94_communication");
+    for (index, _n) in ns
+        .into_iter()
+        .enumerate()
+    {
+        group.throughput(Throughput::Bytes(communication_size[index] as u64));
     }
     group.finish();
 }

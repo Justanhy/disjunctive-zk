@@ -77,29 +77,6 @@ fn bench_init(n: usize, d: usize) -> CDS94Benchmark {
     }
 }
 
-fn prover(
-    protocol: CDS94,
-    cdsprover: CDS94Prover,
-    active_clauses: Vec<bool>,
-    challenge: Scalar,
-) -> (Vec<CompressedRistretto>, Vec<(Scalar, Scalar)>) {
-    let (transcripts, commitments) = CDS94::first(
-        &protocol,
-        cdsprover.borrow_witnesses(),
-        &mut cdsprover.get_rng(),
-        &active_clauses,
-    );
-    let proof = CDS94::third(
-        &protocol,
-        transcripts,
-        cdsprover.borrow_witnesses(),
-        &challenge,
-        &mut cdsprover.get_rng(),
-        &active_clauses,
-    );
-    (commitments, proof)
-}
-
 struct ProverBenchParam {
     protocol: CDS94,
     prover: CDS94Prover,
@@ -111,7 +88,14 @@ impl fmt::Display for ProverBenchParam {
     /// Implementation of Display for the Benchmark
     /// parameters given to the CDS94 prover
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.protocol)
+        write!(
+            f,
+            "<clauses: {}, threshold: {}>",
+            self.protocol
+                .n,
+            self.protocol
+                .threshold
+        )
     }
 }
 
@@ -128,7 +112,7 @@ impl fmt::Display for VerifierBenchParam {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "clauses: {}, threshold: {}",
+            "<clauses: {}, threshold: {}>",
             self.statement
                 .n,
             self.statement

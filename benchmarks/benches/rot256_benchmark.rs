@@ -253,16 +253,16 @@ pub fn rot256_benchmark(c: &mut Criterion) {
     group.bench_function("sig2048", bench_sig2048);
     group.throughput(Throughput::Elements(ns[11] as u64));
     group.bench_function("sig4096", bench_sig4096);
-    group.throughput(Throughput::Elements(ns[12] as u64));
-    group.bench_function("sig8192", bench_sig8192);
-    group.throughput(Throughput::Elements(ns[13] as u64));
-    group.bench_function("sig16384", bench_sig16384);
-    group.throughput(Throughput::Elements(ns[14] as u64));
-    group.bench_function("sig32768", bench_sig32768);
-    group.throughput(Throughput::Elements(ns[15] as u64));
-    group.bench_function("sig65536", bench_sig65536);
-    group.throughput(Throughput::Elements(ns[16] as u64));
-    group.bench_function("sig131072", bench_sig131072);
+    // group.throughput(Throughput::Elements(ns[12] as u64));
+    // group.bench_function("sig8192", bench_sig8192);
+    // group.throughput(Throughput::Elements(ns[13] as u64));
+    // group.bench_function("sig16384", bench_sig16384);
+    // group.throughput(Throughput::Elements(ns[14] as u64));
+    // group.bench_function("sig32768", bench_sig32768);
+    // group.throughput(Throughput::Elements(ns[15] as u64));
+    // group.bench_function("sig65536", bench_sig65536);
+    // group.throughput(Throughput::Elements(ns[16] as u64));
+    // group.bench_function("sig131072", bench_sig131072);
     group.finish();
 }
 

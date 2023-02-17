@@ -17,9 +17,3 @@ sigmazk = { path = "../libs/sigmazk" }
 selfstack_macro = { path = "./selfstack_macro" }
 
 
-[dev-dependencies]
-criterion = { version = "0.4.0", features = ["html_reports"] }
-
-[[bench]]
-name = "stacksig_benchmark"
-harness = false

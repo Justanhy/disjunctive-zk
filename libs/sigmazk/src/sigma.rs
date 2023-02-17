@@ -1,5 +1,38 @@
 //! This module defines traits related to Sigma protocols
+
 use rand_core::CryptoRngCore;
+
+// pub trait Message: Debug + Default + Clone {
+//     fn write<W: Write>(&self, writer: &mut W)
+//     where
+//         Self: Sized;
+
+//     fn size(&self) -> usize {
+//         let mut v: Vec<u8> = Vec::new();
+//         self.write(&mut v);
+//         v.len()
+//     }
+// }
+
+// impl<T: Message> Message for Vec<T> {
+//     fn write<W: Write>(&self, writer: &mut W) {
+//         for item in self {
+//             item.write(writer);
+//         }
+//     }
+// }
+
+// impl Message for &[u8] {
+//     fn write<W: Write>(&self, writer: &mut W) {
+//         writer
+//             .write_all(self)
+//             .unwrap();
+//     }
+// }
+
+// pub trait Challenge {
+//     fn new(bytes: &[u8; 64]) -> Self;
+// }
 
 /// Trait for Sigma protocols
 ///

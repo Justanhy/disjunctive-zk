@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use benchmarks::plot_proofsize;
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
 };
@@ -8,6 +9,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use sigmazk::SigmaProtocol;
 use stacksig_compiler::stackable::schnorr::Schnorr;
+use stacksig_compiler::stackable::Message;
 use stacksig_compiler::stackers::*;
 
 #[allow(dead_code)]
@@ -107,20 +109,22 @@ impl Display for VerifierBenchParam {
 }
 
 pub fn stacksig_benchmark(c: &mut Criterion) {
-    const N: usize = 12;
-    let mut ns: [usize; N - 1] = [0; N - 1];
-    for i in 2..=N {
+    const Q: usize = 12;
+    let mut ns: Vec<usize> = vec![0; Q - 1];
+    for i in 2..=Q {
         ns[i - 2] = 1 << i;
     }
     const BINDING: usize = 1;
 
+    let mut communication_sizes: Vec<usize> = Vec::with_capacity(Q - 1);
+
     let mut group = c.benchmark_group("stacksig_benchmark");
-    for n in ns.into_iter() {
+    for n in ns.iter() {
         let StackerBench {
             s2_statement,
             s2_witness,
             ..
-        } = bench_init(&mut ChaCha20Rng::from_entropy(), n, BINDING);
+        } = bench_init(&mut ChaCha20Rng::from_entropy(), *n, BINDING);
 
         let rng = ChaCha20Rng::from_entropy();
         let challenge =
@@ -135,7 +139,7 @@ pub fn stacksig_benchmark(c: &mut Criterion) {
         let mut message_z: StackedZ<Schnorr> = StackedZ::default();
         let mut message_a: StackedA = StackedA::default();
 
-        group.throughput(Throughput::Elements(n as u64));
+        group.throughput(Throughput::Elements(*n as u64));
         // Benchmark the prover
         group.bench_with_input(
             BenchmarkId::new("prover_bench", &prover_params),
@@ -162,6 +166,9 @@ pub fn stacksig_benchmark(c: &mut Criterion) {
             },
         );
 
+        communication_sizes
+            .push(message_a.size() + message_z.size() + challenge.size());
+
         let mut verifier_params = VerifierBenchParam {
             statement: prover_params.statement,
             message_a,
@@ -185,6 +192,11 @@ pub fn stacksig_benchmark(c: &mut Criterion) {
             },
         );
     }
+
+    group.finish();
+    let filename =
+        format!("proofsize_plots/stacksig_proofsize_{}.html", ns.len());
+    plot_proofsize(ns, communication_sizes, filename);
 }
 
 criterion_group!(benches, stacksig_benchmark);

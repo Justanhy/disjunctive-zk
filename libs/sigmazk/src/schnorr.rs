@@ -184,6 +184,28 @@ impl EHVzk for Schnorr {
     }
 }
 
+// impl Message for CompressedRistretto {
+//     fn write<W: Write>(&self, writer: &mut W) {
+//         writer
+//             .write_all(self.as_bytes())
+//             .unwrap();
+//     }
+// }
+
+// impl Message for Scalar {
+//     fn write<W: Write>(&self, writer: &mut W) {
+//         writer
+//             .write_all(self.as_bytes())
+//             .unwrap();
+//     }
+// }
+
+// impl Challenge for Scalar {
+//     fn new(bytes: &[u8; 64]) -> Self {
+//         Scalar::from_bytes_mod_order_wide(bytes)
+//     }
+// }
+
 /// Implementation of Schnorr protocol
 impl Schnorr {
     /// Initialize the Schnorr protocol with a witness

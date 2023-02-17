@@ -2,12 +2,13 @@
 use core::fmt;
 use std::time::Duration;
 
+use crate::curve25519_dalek::ristretto::CompressedRistretto;
+use crate::curve25519_dalek::scalar::Scalar;
+use benchmarks::plot_proofsize;
 use cds_compiler::*;
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
 };
-use curve25519_dalek::ristretto::CompressedRistretto;
-use curve25519_dalek::scalar::Scalar;
 use rand_chacha::ChaCha20Rng;
 use rand_core::SeedableRng;
 use sigmazk::*;
@@ -122,21 +123,22 @@ impl fmt::Display for VerifierBenchParam {
 }
 
 pub fn cds94_benchmark(c: &mut Criterion) {
-    const N: usize = 8;
-    let ns: [usize; N] = [2, 4, 8, 16, 32, 64, 128, 255];
-    let communication_size: [usize; N] = [0; N];
+    const Q: usize = 8;
+    let mut ns: Vec<usize> = vec![0; Q];
+    for i in 1..=Q {
+        ns[i - 1] = 1 << i;
+    }
+    ns[Q - 1] -= 1; // needed due to limitation of 3rd party library for Shamir
+    let mut communication_sizes: Vec<usize> = Vec::with_capacity(Q - 1);
 
     let mut group = c.benchmark_group("cds94_benchmark");
-    for (_index, n) in ns
-        .into_iter()
-        .enumerate()
-    {
+    for n in ns.iter() {
         let CDS94Benchmark {
             protocol,
             cdsprover,
             cdsverifier,
             active_clauses,
-        } = bench_init(n, 1);
+        } = bench_init(*n, 1);
 
         let challenge = Scalar::random(&mut cdsverifier.get_rng());
 
@@ -147,7 +149,7 @@ pub fn cds94_benchmark(c: &mut Criterion) {
             challenge,
         };
 
-        group.throughput(Throughput::Bytes((n * 32 + n * 64 + 32) as u64));
+        group.throughput(Throughput::Elements(*n as u64));
         group.measurement_time(Duration::from_secs(10));
 
         let mut message_a: Vec<CompressedRistretto> = Vec::new();
@@ -185,6 +187,14 @@ pub fn cds94_benchmark(c: &mut Criterion) {
             },
         );
 
+        communication_sizes.push(
+            message_a.len() * 32
+                + message_z.len() * 64
+                + challenge
+                    .as_bytes()
+                    .len(),
+        );
+
         let v_params: VerifierBenchParam = VerifierBenchParam {
             statement: protocol,
             message_a,
@@ -208,14 +218,9 @@ pub fn cds94_benchmark(c: &mut Criterion) {
         );
     }
     group.finish();
-    let mut group = c.benchmark_group("cds94_communication");
-    for (index, _n) in ns
-        .into_iter()
-        .enumerate()
-    {
-        group.throughput(Throughput::Bytes(communication_size[index] as u64));
-    }
-    group.finish();
+    let filename =
+        format!("proofsize_plots/stacksig_proofsize_{}.html", ns.len());
+    plot_proofsize(ns, communication_sizes, filename);
 }
 
 criterion_group!(benches, cds94_benchmark);

@@ -1,0 +1,32 @@
+[package]
+name = "benchmarks"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cds-compiler = { path = "../cds-compiler" }
+stacksig-compiler = { path = "../stacksig-compiler" }
+sigmazk = { path = "../libs/sigmazk" }
+rand = "0.8.4"
+rand_core = "0.6"
+rand_chacha = "0.3.1"
+curve25519-dalek = { version = "4.0.0-rc.0", features = ["rand_core", "digest"] }
+plotters = "0.3.4"
+plotly = "0.8.3"
+
+[dev-dependencies]
+criterion = { version = "0.4.0", features = ["html_reports", "csv_output"] }
+
+[[bench]]
+name = "cds_benchmark"
+harness = false
+
+[[bench]]
+name = "stacksig_benchmark"
+harness = false
+
+[[bench]]
+name = "rot256_benchmark"
+harness = false

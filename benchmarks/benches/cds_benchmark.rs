@@ -218,9 +218,8 @@ pub fn cds94_benchmark(c: &mut Criterion) {
         );
     }
     group.finish();
-    let filename =
-        format!("proofsize_plots/stacksig_proofsize_{}.html", ns.len());
-    plot_proofsize(ns, communication_sizes, filename);
+    let filename = format!("proofsize_plots/cds/proofsize{}", ns.len());
+    plot_proofsize(ns, communication_sizes, "CDS94".into(), filename);
 }
 
 criterion_group!(benches, cds94_benchmark);

@@ -109,17 +109,24 @@ impl Display for VerifierBenchParam {
 }
 
 pub fn stacksig_benchmark(c: &mut Criterion) {
-    const Q: usize = 12;
+    const Q: usize = 17;
     let mut ns: Vec<usize> = vec![0; Q - 1];
     for i in 2..=Q {
         ns[i - 2] = 1 << i;
     }
+    let samples = [
+        100, 100, 100, 100, 100, 100, 100, 60, 30, 10, 10, 10, 10, 10, 10, 10,
+        10, 10, 10, 10,
+    ];
     const BINDING: usize = 1;
 
     let mut communication_sizes: Vec<usize> = Vec::with_capacity(Q - 1);
 
     let mut group = c.benchmark_group("stacksig_benchmark");
-    for n in ns.iter() {
+    for (i, n) in ns
+        .iter()
+        .enumerate()
+    {
         let StackerBench {
             s2_statement,
             s2_witness,
@@ -138,7 +145,7 @@ pub fn stacksig_benchmark(c: &mut Criterion) {
 
         let mut message_z: StackedZ<Schnorr> = StackedZ::default();
         let mut message_a: StackedA = StackedA::default();
-
+        group.sample_size(samples[i]);
         group.throughput(Throughput::Elements(*n as u64));
         // Benchmark the prover
         group.bench_with_input(
@@ -194,9 +201,8 @@ pub fn stacksig_benchmark(c: &mut Criterion) {
     }
 
     group.finish();
-    let filename =
-        format!("proofsize_plots/stacksig_proofsize_{}.html", ns.len());
-    plot_proofsize(ns, communication_sizes, filename);
+    let filename = format!("proofsize_plots/stacksig/proofsize{}", ns.len());
+    plot_proofsize(ns, communication_sizes, "Stacking Sigmas".into(), filename);
 }
 
 criterion_group!(benches, stacksig_benchmark);

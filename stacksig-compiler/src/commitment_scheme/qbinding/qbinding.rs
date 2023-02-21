@@ -3,7 +3,7 @@
 //! schemes
 use std::rc::Rc;
 
-use crate::commitment_scheme::comm::PartialBindingCommScheme;
+pub use crate::commitment_scheme::comm::PartialBindingCommScheme;
 use crate::commitment_scheme::halfbinding::{Commitment, HalfBinding};
 
 use super::*;
@@ -45,16 +45,6 @@ impl QBinding {
 
     pub fn inner_length(&self) -> usize {
         1 << (self.q - 1)
-    }
-
-    fn setupgen<R: CryptoRngCore>(
-        &self,
-        rng: &mut R,
-        binding_index: BindingIndex,
-    ) -> (PublicParams, CommitKey, EquivKey) {
-        let pp = self.setup(rng);
-        let (ck, ek) = self.gen(&pp, binding_index, rng);
-        (pp, ck, ek)
     }
 }
 /// Implementation of 1-of-2^2 partially-binding vector

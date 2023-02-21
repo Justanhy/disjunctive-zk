@@ -1,8 +1,8 @@
-use rand_core::CryptoRngCore;
-use sigmazk::{EHVzk, SigmaProtocol};
-
 use std::fmt::Debug;
 use std::io::Write;
+
+use rand_core::CryptoRngCore;
+use sigmazk::{EHVzk, SigmaProtocol};
 
 pub trait Message: Debug + Default + Clone {
     fn write<W: Write>(&self, writer: &mut W)

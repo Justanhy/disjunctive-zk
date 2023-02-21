@@ -1,8 +1,10 @@
 use criterion::{
-    black_box, criterion_group, criterion_main, Bencher, BenchmarkId, Criterion,
+    black_box, criterion_group, criterion_main, Bencher, BenchmarkId,
+    Criterion, Throughput,
 };
 
-use stacksig_compiler::{compiler::*, fiat, schnorr, Side};
+use stacksig_compiler::compiler::*;
+use stacksig_compiler::{fiat, schnorr, Side};
 
 use rand_core::OsRng;
 
@@ -22,6 +24,11 @@ type S512 = Compiled<S256>;
 type S1024 = Compiled<S512>;
 type S2048 = Compiled<S1024>;
 type S4096 = Compiled<S2048>;
+type S8192 = Compiled<S4096>;
+type S16384 = Compiled<S8192>;
+type S32768 = Compiled<S16384>;
+type S65536 = Compiled<S32768>;
+type S131072 = Compiled<S65536>;
 
 pub type Sig2 = fiat::SignatureScheme<S2>;
 pub type Sig4 = fiat::SignatureScheme<S4>;
@@ -35,6 +42,11 @@ pub type Sig512 = fiat::SignatureScheme<S512>;
 pub type Sig1024 = fiat::SignatureScheme<S1024>;
 pub type Sig2048 = fiat::SignatureScheme<S2048>;
 pub type Sig4096 = fiat::SignatureScheme<S4096>;
+pub type Sig8192 = fiat::SignatureScheme<S8192>;
+pub type Sig16384 = fiat::SignatureScheme<S16384>;
+pub type Sig32768 = fiat::SignatureScheme<S32768>;
+pub type Sig65536 = fiat::SignatureScheme<S65536>;
+pub type Sig131072 = fiat::SignatureScheme<S131072>;
 
 macro_rules! compile {
     ($pks:expr, $sk:expr) => {{
@@ -99,6 +111,26 @@ macro_rules! compilen {
         let (pk, sk) = compile!($pks, $sk);
         compilen!(11, pk, sk)
     }};
+    (13, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(12, pk, sk)
+    }};
+    (14, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(13, pk, sk)
+    }};
+    (15, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(14, pk, sk)
+    }};
+    (16, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(15, pk, sk)
+    }};
+    (17, $pks:expr, $sk:expr) => {{
+        let (pk, sk) = compile!($pks, $sk);
+        compilen!(16, pk, sk)
+    }};
 }
 
 macro_rules! bench_scheme {
@@ -111,7 +143,12 @@ macro_rules! bench_scheme {
         }
         let (pk, sk) = compilen!($n, pk, sk);
         $b.iter(|| {
-            $s::sign(&mut OsRng, &sk, &pk[0], &[]);
+            $s::sign(
+                black_box(&mut OsRng),
+                black_box(&sk),
+                black_box(&pk[0]),
+                &[],
+            );
         });
     }};
 }
@@ -164,22 +201,70 @@ fn bench_sig4096(b: &mut Bencher) {
     bench_scheme!(b, 12, Sig4096);
 }
 
-pub fn stacksig_benchmark(c: &mut Criterion) {
-    let mut group = c.benchmark_group("stacksig");
+fn bench_sig8192(b: &mut Bencher) {
+    bench_scheme!(b, 13, Sig8192);
+}
+
+fn bench_sig16384(b: &mut Bencher) {
+    bench_scheme!(b, 14, Sig16384);
+}
+
+fn bench_sig32768(b: &mut Bencher) {
+    bench_scheme!(b, 15, Sig32768);
+}
+
+fn bench_sig65536(b: &mut Bencher) {
+    bench_scheme!(b, 16, Sig65536);
+}
+
+fn bench_sig131072(b: &mut Bencher) {
+    bench_scheme!(b, 17, Sig131072);
+}
+
+pub fn rot256_benchmark(c: &mut Criterion) {
+    const N: usize = 12;
+    let mut ns: [usize; N] = [0; N];
+    for i in 1..=N {
+        ns[i - 1] = 1 << i;
+    }
+
+    let mut group = c.benchmark_group("rot256_benchmark");
+    group.throughput(Throughput::Elements(ns[0] as u64));
     group.bench_function("sig2", bench_sig2);
+    group.throughput(Throughput::Elements(ns[1] as u64));
     group.bench_function("sig4", bench_sig4);
+    group.throughput(Throughput::Elements(ns[2] as u64));
     group.bench_function("sig8", bench_sig8);
+    group.throughput(Throughput::Elements(ns[3] as u64));
     group.bench_function("sig16", bench_sig16);
+    group.throughput(Throughput::Elements(ns[4] as u64));
     group.bench_function("sig32", bench_sig32);
+    group.throughput(Throughput::Elements(ns[5] as u64));
     group.bench_function("sig64", bench_sig64);
+    group.throughput(Throughput::Elements(ns[6] as u64));
     group.bench_function("sig128", bench_sig128);
+    group.throughput(Throughput::Elements(ns[7] as u64));
     group.bench_function("sig256", bench_sig256);
+    group.throughput(Throughput::Elements(ns[8] as u64));
     group.bench_function("sig512", bench_sig512);
+    group.throughput(Throughput::Elements(ns[9] as u64));
     group.bench_function("sig1024", bench_sig1024);
+    group.throughput(Throughput::Elements(ns[10] as u64));
     group.bench_function("sig2048", bench_sig2048);
+    group.throughput(Throughput::Elements(ns[11] as u64));
     group.bench_function("sig4096", bench_sig4096);
+    // group.throughput(Throughput::Elements(ns[12] as u64));
+    // group.bench_function("sig8192", bench_sig8192);
+    // group.throughput(Throughput::Elements(ns[13] as u64));
+    // group.bench_function("sig16384", bench_sig16384);
+    // group.throughput(Throughput::Elements(ns[14] as u64));
+    // group.bench_function("sig32768", bench_sig32768);
+    // group.throughput(Throughput::Elements(ns[15] as u64));
+    // group.bench_function("sig65536", bench_sig65536);
+    // group.throughput(Throughput::Elements(ns[16] as u64));
+    // group.bench_function("sig131072", bench_sig131072);
     group.finish();
 }
 
-criterion_group!(benches, stacksig_benchmark);
+criterion_group!(benches, rot256_benchmark);
 criterion_main!(benches);

@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+  "benchmarks",
   "cds-compiler",
   "stacksig-compiler",
   "stacksig-compiler/selfstack_macro",

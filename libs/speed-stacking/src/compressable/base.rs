@@ -11,9 +11,24 @@ pub struct Base<G1: PrimeGroup, F: PrimeField, G2: PrimeGroup, L: Hom<F, G2>> {
     _marker: std::marker::PhantomData<(G1, F, G2, L)>,
 }
 
+impl<G1, F, G2, L> Base<G1, F, G2, L>
+where
+    G1: PrimeGroup,
+    F: PrimeField,
+    G2: PrimeGroup + ScalarMul<F>,
+    L: Hom<F, G2>,
+{
+    pub fn new(n: usize) -> Self {
+        Self {
+            n,
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
 pub fn multi_exponentiation<G: PrimeGroup>(
-    bases: &Vec<G>,
-    exponents: &Vec<G::Scalar>,
+    bases: &[G],
+    exponents: &[G::Scalar],
 ) -> G {
     bases
         .iter()
@@ -21,8 +36,10 @@ pub fn multi_exponentiation<G: PrimeGroup>(
         .fold(G::identity(), |acc, (g, r)| acc + *g * r)
 }
 
-pub struct BaseStatement<G1: PrimeGroup, G2: PrimeGroup> {
+pub struct BaseStatement<G1: PrimeGroup, G2: PrimeGroup, L: Hom<G1::Scalar, G2>>
+{
     pub generators: Vec<G1>,
+    pub f: L,
     pub g1_public_key: G1,
     pub g2_public_key: G2,
 }
@@ -33,7 +50,7 @@ where
     G2: PrimeGroup + ScalarMul<G1::Scalar>,
     L: Hom<G1::Scalar, G2>,
 {
-    type Statement = BaseStatement<G1, G2>;
+    type Statement = BaseStatement<G1, G2, L>;
     type Witness = Vec<G1::Scalar>;
 
     type MessageA = (G1, G2);
@@ -60,7 +77,9 @@ where
         let r: Vec<G1::Scalar> = (0..n)
             .map(|_| G1::Scalar::random(prover_rng.as_rngcore()))
             .collect();
-        let t2 = L::f(&r);
+        let t2 = statement
+            .f
+            .f(&r);
         let t1 = statement
             .generators
             .iter()
@@ -105,7 +124,9 @@ where
     where
         Self: Sized,
     {
-        let fz = L::f(z);
+        let fz = statement
+            .f
+            .f(z);
         let gz = statement
             .generators
             .iter()

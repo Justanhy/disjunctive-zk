@@ -1,0 +1,16 @@
+[package]
+name = "speed-stacking"
+version = "0.1.0"
+edition = "2021"
+license = "GPLv3"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+curve25519-dalek = { verion = "4.0.0-rc.0", features = ["rand_core", "digest"] }
+group = "0.13.0"
+rand = "0.8.4"
+rand_core = "0.6.3"
+rand_chacha = "0.3.1"
+sigmazk = { path = "../sigmazk" }
+wrapped-ristretto = { path = "../wrapped-ristretto" }

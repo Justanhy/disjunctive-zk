@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cds-compiler = { path = "../cds-compiler" }
-stacksig-compiler = { path = "../stacksig-compiler" }
+cds-compiler = { path = "../libs/cds-compiler" }
+stacksig-compiler = { path = "../libs/stacksig-compiler" }
 sigmazk = { path = "../libs/sigmazk" }
 rand = "0.8.4"
 rand_core = "0.6"

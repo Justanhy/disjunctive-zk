@@ -2,6 +2,8 @@ use core::iter::{Product, Sum};
 use core::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use curve25519_dalek::Scalar;
 use group::ff::{Field, PrimeField};
+use group::prime::PrimeGroup;
+use group::{Group, GroupEncoding};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rand_core::CryptoRngCore;
@@ -62,6 +64,55 @@ impl WrappedScalar {
     pub fn is_canonical(&self) -> Choice {
         self.0
             .is_canonical()
+    }
+}
+
+impl PrimeGroup for WrappedScalar {}
+
+impl GroupEncoding for WrappedScalar {
+    type Repr = [u8; 32];
+
+    fn from_bytes(bytes: &[u8; 32]) -> CtOption<Self> {
+        CtOption::new(
+            Self(Scalar::from_bytes_mod_order(*bytes)),
+            Choice::from(1u8),
+        )
+    }
+
+    fn from_bytes_unchecked(bytes: &Self::Repr) -> CtOption<Self> {
+        Self::from_canonical_bytes(*bytes)
+    }
+
+    fn to_bytes(&self) -> Self::Repr {
+        self.0
+            .to_bytes()
+    }
+}
+
+impl Group for WrappedScalar {
+    type Scalar = WrappedScalar;
+
+    fn random(mut rng: impl RngCore) -> Self {
+        let mut seed = [0u8; 32];
+        rng.fill_bytes(&mut seed);
+        let mut crng = ChaChaRng::from_seed(seed);
+        Self(Scalar::random(&mut crng))
+    }
+
+    fn identity() -> Self {
+        Self(Scalar::ZERO)
+    }
+
+    fn generator() -> Self {
+        Self(Scalar::ONE)
+    }
+
+    fn is_identity(&self) -> Choice {
+        Choice::from(u8::from(self == &Self::identity()))
+    }
+
+    fn double(&self) -> Self {
+        Self(self.0 + self.0)
     }
 }
 

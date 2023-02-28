@@ -1,5 +1,4 @@
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_TABLE;
-use curve25519_dalek::RistrettoPoint;
 use wrapped_ristretto::ristretto::WrappedRistretto;
 use wrapped_ristretto::scalar::WrappedScalar;
 
@@ -9,19 +8,15 @@ use super::base::*;
 
 pub struct Hom25519;
 
-impl Hom<WrappedScalar, WrappedRistretto> for Hom25519 {
-    fn f(a: &Vec<WrappedScalar>) -> WrappedRistretto {
-        WrappedRistretto(
-            &a.iter()
-                .sum::<WrappedScalar>()
-                .0
-                * RISTRETTO_BASEPOINT_TABLE,
-        )
+impl Hom<WrappedScalar, WrappedScalar> for Hom25519 {
+    fn f(a: &Vec<WrappedScalar>) -> WrappedScalar {
+        a.iter()
+            .sum::<WrappedScalar>()
     }
 }
 
 pub type Base25519 =
-    Base<WrappedRistretto, WrappedScalar, WrappedRistretto, Hom25519>;
+    Base<WrappedRistretto, WrappedScalar, WrappedScalar, Hom25519>;
 
 #[cfg(test)]
 mod tests {
@@ -41,10 +36,11 @@ mod tests {
         let witness =
             vec![WrappedScalar::random(&mut ChaCha20Rng::from_entropy(),); 10];
         let g1_public_key = multi_exponentiation(&generators, &witness);
+        let g2_public_key = Hom25519::f(&witness);
         let statement = BaseStatement {
             generators,
             g1_public_key,
-            g2_public_key: Hom25519::f(&witness),
+            g2_public_key,
         };
 
         let prover_rng = &mut ChaCha20Rng::from_seed([0u8; 32]);

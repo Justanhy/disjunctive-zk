@@ -1,11 +1,10 @@
-use core::ops::Mul;
 use group::ff::{Field, PrimeField};
 use group::prime::PrimeGroup;
-use group::{Group, ScalarMul};
+use group::ScalarMul;
 use rand_core::CryptoRngCore;
 use sigmazk::SigmaProtocol;
 use std::rc::Rc;
-use wrapped_ristretto::scalar::WrappedScalar;
+use wrapped_ristretto::CommonField;
 
 use crate::homomorphism::Hom;
 
@@ -45,29 +44,35 @@ where
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct ComposedHom<G: PrimeGroup> {
-    pub challenge_i: G::Scalar,
+pub struct ComposedHom<G1: PrimeGroup, G2: PrimeGroup> {
+    pub challenge_i: G1::Scalar,
+    _marker: std::marker::PhantomData<G2>,
 }
 
-impl<G: PrimeGroup> ComposedHom<G> {
-    pub fn new(challenge_i: G::Scalar) -> Self {
-        Self { challenge_i }
+impl<G1: PrimeGroup, G2: PrimeGroup> ComposedHom<G1, G2> {
+    pub fn new(challenge_i: G1::Scalar) -> Self {
+        Self {
+            challenge_i,
+            _marker: std::marker::PhantomData,
+        }
     }
 }
 
-impl<G> Hom<G::Scalar, G::Scalar> for ComposedHom<G>
+impl<G1, G2> Hom<G1::Scalar, G2> for ComposedHom<G1, G2>
 where
-    G: PrimeGroup,
-    G::Scalar: Group,
+    G1: PrimeGroup,
+    G2: PrimeGroup + CommonField<G1>,
 {
-    fn fleft(&self, x: &[G::Scalar]) -> G::Scalar {
+    fn fleft(&self, x: &[G1::Scalar]) -> G2 {
         x.iter()
-            .fold(G::Scalar::ZERO, |acc, x| acc + *x * self.challenge_i)
+            .fold(G2::identity(), |acc, x| {
+                G2::generator() * self.challenge_i * x + acc
+            })
     }
 
-    fn fright(&self, x: &[G::Scalar]) -> G::Scalar {
+    fn fright(&self, x: &[G1::Scalar]) -> G2 {
         x.iter()
-            .fold(G::Scalar::ZERO, |acc, x| acc + x)
+            .fold(G2::identity(), |acc, x| G2::generator() * x + acc)
     }
 }
 
@@ -89,7 +94,7 @@ pub struct ComposedStatement<
     pub history: History<G1, G2, L>,
     pub n: usize,
     pub generators: Vec<G1>,
-    pub hom_f: L,
+    pub hom_f: ComposedHom<G1, G2>,
     pub g1_public_key: G1,
     pub g2_public_key: G2, // y_i
 }
@@ -106,10 +111,15 @@ pub struct ComposedState<G2: PrimeGroup> {
     pub b: G2,
 }
 
+pub struct ComposedZ<G1: PrimeGroup, G2: PrimeGroup, L: Hom<G1::Scalar, G2>> {
+    pub new_statement: Option<ComposedStatement<G1, G2, L>>,
+    pub new_witnesses: Option<Vec<G1::Scalar>>,
+}
+
 impl<G1, G2, L> SigmaProtocol for CompMechanism<G1, G1::Scalar, G2, L>
 where
     G1: PrimeGroup,
-    G2: PrimeGroup + ScalarMul<G1::Scalar>,
+    G2: PrimeGroup + CommonField<G1>,
     L: Hom<G1::Scalar, G2>,
 {
     type Statement = ComposedStatement<G1, G2, L>;
@@ -117,7 +127,7 @@ where
     type State = ComposedState<G2>;
 
     type MessageA = ComposedA<G1, G2>;
-    type MessageZ = ();
+    type MessageZ = ComposedZ<G1, G2, L>;
     type Challenge = G1::Scalar;
 
     type ProverContext = ();
@@ -182,34 +192,40 @@ where
     {
         let challenge = *challenge;
         if statement.n == 4 {
-            vec![
+            let new_witnesses = Some(vec![
                 challenge * witness[2] + witness[0],
                 challenge * witness[3] + witness[1],
-            ];
+            ]);
+
+            ComposedZ {
+                new_statement: None,
+                new_witnesses,
+            }
         } else {
             let midpoint = statement.n / 2;
             // Create witness vector for next round
             let (xleft, xright) = witness
                 .as_slice()
                 .split_at(midpoint);
-            let x_new: Vec<G1::Scalar> = xleft
+            let new_witnesses: Vec<G1::Scalar> = xleft
                 .iter()
                 .zip(xright.iter())
                 .map(|(l, r)| challenge * l + r)
                 .collect();
+
             // Create generator vector for next round
             let (gleft, gright) = statement
                 .generators
                 .as_slice()
                 .split_at(midpoint);
-            let g_new: Vec<G1> = gleft
+            let new_generators: Vec<G1> = gleft
                 .iter()
                 .zip(gright.iter())
                 .map(|(l, r)| *l * challenge + r)
                 .collect();
 
             // Create homomorphism for next round
-            let hom_f: ComposedHom<G1> = ComposedHom::new(challenge);
+            let hom_f: ComposedHom<G1, G2> = ComposedHom::new(challenge);
 
             // Create new g2_public_key (y_{i + 1} in the paper)
             // y_{i + 1} = ai + c_i*y_i + b_i * c_i^2
@@ -232,16 +248,21 @@ where
                 .push(challenge);
 
             // Create new statement for next round
-            let statement: ComposedStatement<G1, G2, L> = ComposedStatement {
-                history,
-                n: midpoint,
-                generators: g_new,
-                hom_f: hom_f as Hom<G1::Scalar, G2>,
-                g1_public_key: statement.g1_public_key,
-                g2_public_key,
-            };
+            let new_statement: ComposedStatement<G1, G2, L> =
+                ComposedStatement {
+                    history,
+                    n: midpoint,
+                    generators: new_generators,
+                    hom_f,
+                    g1_public_key: statement.g1_public_key,
+                    g2_public_key,
+                };
+
+            ComposedZ {
+                new_statement: Some(new_statement),
+                new_witnesses: Some(new_witnesses),
+            }
         }
-        unimplemented!()
     }
 
     fn verify(

@@ -1,1 +1,3 @@
+# Tags html files in this folder as generated so they don't show up in diffs
+# and they don't contribute to the project's language statistics.
 *.html linguist-generated=true

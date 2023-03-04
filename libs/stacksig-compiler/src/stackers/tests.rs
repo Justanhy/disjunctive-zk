@@ -238,6 +238,46 @@ mod test_selfstacker {
         ));
     }
 
+    #[test]
+    fn it_fails() {
+        const Q: usize = 4;
+        const CLAUSES: usize = 1 << Q;
+        const B: usize = 5;
+
+        let rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
+        let verifier_rng = &mut ChaCha20Rng::from_entropy();
+        let StackerTest {
+            s2_statement,
+            s2_witness,
+            ..
+        } = testinit(rng, CLAUSES, B);
+
+        let (state, message_a) = SelfStacker::first(
+            &s2_statement,
+            &s2_witness,
+            &mut rng.clone(),
+            &(),
+        );
+        let given_challenge = SelfStacker::<Schnorr>::second(verifier_rng);
+        let spoof_challenge =
+            SelfStacker::<Schnorr>::second(&mut ChaCha20Rng::from_entropy());
+
+        let message_z = SelfStacker::third(
+            &s2_statement,
+            state,
+            &s2_witness,
+            &spoof_challenge,
+            rng,
+            &(),
+        );
+        assert!(!SelfStacker::verify(
+            &s2_statement,
+            &message_a,
+            &given_challenge,
+            &message_z
+        ));
+    }
+
     // #[test]
     // fn selfstack_works() {
     //     const CLAUSES: usize = 50000;

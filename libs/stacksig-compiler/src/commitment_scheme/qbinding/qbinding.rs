@@ -473,7 +473,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn warzone() {
+    fn sandbox() {
         let rng1 = &mut ChaCha20Rng::from_seed([0u8; 32]);
         let rng2 = &mut ChaCha20Rng::from_seed([0u8; 32]);
         let mdefault = Rc::new("default".as_bytes());
@@ -593,7 +593,31 @@ mod tests {
     }
 
     #[test]
-    fn test_qbinding_fails() {
+    fn test_qbinding_base_fails_when_equiv_vs_bind_msg_differs() {
+        let rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
+        let m1 = Rc::new("hello".as_bytes());
+        let m2 = Rc::new("world".as_bytes());
+        let m3 = Rc::new("this is a test".as_bytes());
+        let m4 = Rc::new("can you hear me?".as_bytes());
+        let none = Rc::new("".as_bytes());
+        let msg = vec![none.clone(), none.clone(), m3.clone(), none];
+        let msg_equiv = vec![m1, m2, m3, m4];
+
+        const Q: usize = 2;
+        let (qbinding, binding_index) = QBinding::init(Q, 2);
+        let aux = Randomness::random(rng, Q);
+        let pp = qbinding.setup(rng);
+        let (ck, ek) = qbinding.gen(&pp, binding_index, rng);
+
+        let (comm_equivcom, aux) =
+            qbinding.equivcom(&pp, &ek, &msg, Some(aux.clone()));
+        let aux_new = qbinding.equiv(&pp, &ek, &msg, &msg_equiv, &aux);
+        let comm_bind = qbinding.bind(&pp, &ck, &msg, &aux_new);
+        assert_ne!(comm_equivcom, comm_bind);
+    }
+
+    #[test]
+    fn test_qbinding_fails_when_bound_msg_changes() {
         let rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
         let m1 = Rc::new("hello".as_bytes());
         let m2 = Rc::new("world".as_bytes());

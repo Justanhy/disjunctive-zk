@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use benchmarks::plot_proofsize;
+use benchmarks::{plot_dir, plot_proofsize};
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
 };
@@ -109,7 +109,7 @@ impl Display for VerifierBenchParam {
 }
 
 pub fn stacksig_benchmark(c: &mut Criterion) {
-    const Q: usize = 17;
+    const Q: usize = 13;
     let mut ns: Vec<usize> = vec![0; Q - 1];
     for i in 2..=Q {
         ns[i - 2] = 1 << i;
@@ -201,7 +201,8 @@ pub fn stacksig_benchmark(c: &mut Criterion) {
     }
 
     group.finish();
-    let filename = format!("proofsize_plots/stacksig/proofsize{}", ns.len());
+    let filename =
+        format!("{}proofsize_plots/stacksig/proofsize{}", plot_dir, ns.len());
     plot_proofsize(ns, communication_sizes, "Stacking Sigmas".into(), filename);
 }
 

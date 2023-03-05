@@ -5,6 +5,8 @@ use plotly::common::{Line, LineShape, Mode, Title};
 use plotly::layout::{Axis, AxisType};
 use plotly::{Layout, Plot, Scatter};
 
+pub const plot_dir: &str = "../plots/";
+
 pub fn plot_proofsize(
     clauses: Vec<usize>,
     proof_size: Vec<usize>,

@@ -12,6 +12,10 @@ impl<T: Clone> Inner<T> {
         Self(inner)
     }
 
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(Vec::with_capacity(capacity))
+    }
+
     pub fn as_vec(&self) -> &Vec<T> {
         &self.0
     }
@@ -40,10 +44,11 @@ impl<T: Clone> Inner<T> {
     ///
     /// TODO: Replace Option with Result
     pub fn uncap(&self) -> Option<(Self, T)> {
+        // Cannot have 0 elements in the inner vector
         if self
             .0
             .len()
-            < 2
+            < 1
         {
             return None;
         }
@@ -95,8 +100,6 @@ pub trait InnerOuter<T: Clone + Debug> {
     /// Get the first element of the inner vector which is
     /// usually the innermost T
     fn base_inner(&self) -> &T {
-        self.get_inner()
-            .first()
-            .unwrap()
+        self.get_outer()
     }
 }

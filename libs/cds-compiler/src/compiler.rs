@@ -66,6 +66,8 @@ impl SigmaProtocol for CDS94 {
     ) -> (Self::State, Self::MessageA) {
         assert!(active_clauses.len() == statement.n);
 
+        let mut commitment: Self::MessageA = Vec::with_capacity(statement.n);
+
         let transcripts: Self::State = active_clauses
             .iter()
             .enumerate()
@@ -85,19 +87,23 @@ impl SigmaProtocol for CDS94 {
                 } else {
                     Box::new(statement.protocols[i].simulator())
                 };
+                commitment.push(
+                    ret.get_commitment()
+                        .unwrap(),
+                );
                 ret
             })
             .collect();
         // let mut _error: Option<Error> = None; // For error
         // propagation
 
-        let commitment: Self::MessageA = transcripts
-            .iter()
-            .map(|t| {
-                t.get_commitment()
-                    .expect("Commitment should be present")
-            })
-            .collect();
+        // let commitment: Self::MessageA = transcripts
+        //     .iter()
+        //     .map(|t| {
+        //         t.get_commitment()
+        //             .expect("Commitment should be present")
+        //     })
+        //     .collect();
         (transcripts, commitment)
     }
 
@@ -116,76 +122,37 @@ impl SigmaProtocol for CDS94 {
         let shares =
             CDS94::fill_missing_shares(&state, *challenge, active_clauses);
 
-        let mut transcripts: Vec<SigTrans> = shares
+        // Loop through transcripts and fill in the challenge
+        shares
             .iter()
             .map(|share| {
                 let i = share.identifier() as usize - 1;
 
                 match state[i].get_challenge() {
-                    Some(s) => Box::new(SchnorrTranscript {
-                        commitment: state[i].get_commitment(),
-                        challenge: state[i].get_challenge(),
-                        proof: state[i].get_proof(),
-                    }) as SigTrans,
+                    // Inactive clauses
+                    Some(s) => (
+                        s,
+                        state[i]
+                            .get_proof()
+                            .expect("Proof should be present"),
+                    ),
+                    // Active clauses
                     None => {
                         let mut c = [0u8; 32];
                         c.copy_from_slice(share.value());
+                        let challenge = Some(Scalar::from_bytes_mod_order(c));
+                        let proof = Schnorr::third(
+                            &statement.protocols[i],
+                            Scalar::default(),
+                            &witness[i],
+                            &challenge.unwrap(),
+                            &mut statement.provers[i].get_rng(),
+                            &(),
+                        );
 
-                        Box::new(SchnorrTranscript {
-                            commitment: state[i].get_commitment(),
-                            challenge: Some(Scalar::from_bytes_mod_order(c)),
-                            proof: None,
-                        }) as SigTrans
+                        (challenge.unwrap(), proof)
                     }
                 }
-            })
-            .collect();
-
-        for (i, transcript) in transcripts
-            .iter_mut()
-            .enumerate()
-        {
-            if !transcript.is_challenged() {
-                panic!("Transcript should have a challenge and commitment");
-            }
-            if transcript.is_proven() {
-                if active_clauses[i] {
-                    panic!(
-                        "Transcript should not be proven yet as it is an \
-                         active clause"
-                    );
-                }
-                continue;
-            } else {
-                let proof = Schnorr::third(
-                    &statement.protocols[i],
-                    Scalar::default(),
-                    &witness[i],
-                    &transcript
-                        .get_challenge()
-                        .expect("Challenge should be present"),
-                    &mut statement.provers[i].get_rng(),
-                    &(),
-                );
-                *transcript = Box::new(SchnorrTranscript {
-                    commitment: transcript.get_commitment(),
-                    challenge: transcript.get_challenge(),
-                    proof: Some(proof),
-                }) as SigTrans;
-            }
-        }
-
-        // Return vector of challenges and vector of proofs or a
-        // vector of tuples of them
-        transcripts
-            .iter()
-            .map(|t| {
-                (
-                    t.get_challenge()
-                        .expect("Challenge should be present"),
-                    t.get_proof()
-                        .expect("Proof should be present"),
-                )
             })
             .collect_vec()
     }
@@ -196,20 +163,11 @@ impl SigmaProtocol for CDS94 {
         secret: &Self::Challenge,
         z: &Self::MessageZ,
     ) -> bool {
-        let cs = z
-            .iter()
-            .map(|x| x.0)
-            .collect_vec();
-        let m2s = z
-            .iter()
-            .map(|x| x.1)
-            .collect_vec();
-
-        assert!(a.len() == cs.len(), "Invalid input lengths");
+        assert!(a.len() == z.len(), "Invalid input lengths");
 
         let mut shares: Vec<Share> = Vec::with_capacity(statement.n);
 
-        for (i, (m1, c, m2)) in izip!(a, cs, m2s).enumerate() {
+        for (i, (m1, (c, m2))) in izip!(a, z).enumerate() {
             if !Schnorr::verify(&statement.protocols[i], &m1, &c, &m2) {
                 return false;
             }
@@ -287,10 +245,11 @@ impl CDS94 {
         shares.sort_by_key(|k| k.identifier());
 
         // Check shares can combine to the challenge
-        let combineshares = shamir.combine_shares::<WrappedScalar>(&shares);
-        assert!(combineshares.is_ok());
-        let combined_secret = combineshares.unwrap();
-        assert!(combined_secret.0 == challenge);
+        // let combineshares =
+        // shamir.combine_shares::<WrappedScalar>(&shares);
+        // assert!(combineshares.is_ok());
+        // let combined_secret = combineshares.unwrap();
+        // assert!(combined_secret.0 == challenge);
 
         shares
     }

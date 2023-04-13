@@ -1,4 +1,3 @@
-pub extern crate curve25519_dalek_ml as curve25519_dalek;
 extern crate itertools;
 extern crate rand_chacha;
 extern crate rand_core;
@@ -12,13 +11,13 @@ pub use compiler::*;
 use itertools::{izip, Itertools};
 use rand_chacha::ChaCha20Rng;
 use rand_core::{CryptoRngCore, SeedableRng};
-use shamir_ss::vsss_rs::curve25519::WrappedScalar;
-use shamir_ss::{Shamir, Share, WithShares};
+use shamir_ss::shamir::{ShamirSecretSharing, Share};
 use sigmazk::{
     Schnorr, SchnorrProver, SchnorrTranscript, SchnorrVerifier, SigmaProtocol,
     SigmaProver, SigmaTranscript, SigmaVerifier,
 };
 use std::fmt;
+use wrapped_ristretto::scalar::WrappedScalar;
 
 #[derive(Clone, Debug)]
 pub struct CDS94Prover {
@@ -243,8 +242,8 @@ pub mod tests {
     fn cds_works() {
         // INIT //
         // number of clauses
-        const N: usize = 255;
-        const D: usize = 200;
+        const N: usize = 256;
+        const D: usize = 1;
         let (
             protocol,
             cdsprover,

@@ -2,13 +2,13 @@
 use core::fmt;
 use std::time::Duration;
 
-use crate::curve25519_dalek::ristretto::CompressedRistretto;
-use crate::curve25519_dalek::scalar::Scalar;
 use benchmarks::{plot_dir, plot_proofsize};
 use cds_compiler::*;
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
 };
+use curve25519_dalek::ristretto::CompressedRistretto;
+use curve25519_dalek::scalar::Scalar;
 use rand_chacha::ChaCha20Rng;
 use rand_core::SeedableRng;
 use sigmazk::*;

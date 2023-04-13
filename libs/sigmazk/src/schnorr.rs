@@ -112,7 +112,7 @@ impl SigmaProtocol for Schnorr {
         _: &(),
     ) -> (Self::State, Self::MessageA) {
         let state = Scalar::random(prover_rng);
-        let message = &state * &RISTRETTO_BASEPOINT_TABLE;
+        let message = &state * RISTRETTO_BASEPOINT_TABLE;
         (state, message.compress())
     }
 
@@ -138,7 +138,7 @@ impl SigmaProtocol for Schnorr {
         c: &Scalar,
         z: &Scalar,
     ) -> bool {
-        &RISTRETTO_BASEPOINT_TABLE * z - c * statement.pub_key
+        RISTRETTO_BASEPOINT_TABLE * z - c * statement.pub_key
             == a.decompress()
                 .unwrap()
     }
@@ -161,7 +161,7 @@ impl ZeroKnowledge for Schnorr {
             challenge,
         } = args;
         let commitment = Some(
-            (&RISTRETTO_BASEPOINT_TABLE * &proof - challenge * pub_key)
+            (RISTRETTO_BASEPOINT_TABLE * &proof - challenge * pub_key)
                 .compress(),
         );
         SchnorrTranscript {
@@ -179,7 +179,7 @@ impl EHVzk for Schnorr {
         challenge: &Self::Challenge,
         z: &Self::MessageZ,
     ) -> Self::MessageA {
-        (&RISTRETTO_BASEPOINT_TABLE * z - challenge * statement.pub_key)
+        (RISTRETTO_BASEPOINT_TABLE * z - challenge * statement.pub_key)
             .compress()
     }
 }

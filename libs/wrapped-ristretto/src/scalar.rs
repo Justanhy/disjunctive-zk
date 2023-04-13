@@ -438,3 +438,9 @@ impl From<Scalar> for WrappedScalar {
         Self(s)
     }
 }
+
+impl From<[u8; 32]> for WrappedScalar {
+    fn from(bytes: [u8; 32]) -> WrappedScalar {
+        Self(Scalar::from_bytes_mod_order(bytes))
+    }
+}

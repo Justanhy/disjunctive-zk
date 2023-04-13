@@ -1,7 +1,6 @@
 //! This crate defines traits related to Sigma Protocols and
 //! includes an implementation of Schnorr's identification
 //! scheme implementing said traits.
-extern crate curve25519_dalek_ml as curve25519_dalek;
 extern crate rand;
 extern crate rand_chacha;
 extern crate rand_core;

@@ -38,16 +38,6 @@ impl fmt::Display for CDS94 {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Witness94<S: SigmaProtocol> {
-    pub witness: Vec<S::Witness>,
-    pub active_clauses: HashSet<usize>,
-}
-
-pub struct Statement94<S: SigmaProtocol> {
-    pub statement: S::Statement,
-}
-
 type SigTrans = Box<
     dyn SigmaTranscript<
         MessageA = CompressedRistretto,
@@ -66,7 +56,7 @@ impl SigmaProtocol for CDS94 {
 
     type MessageA = Vec<CompressedRistretto>;
     type Challenge = Scalar;
-    type MessageZ = Vec<(Scalar, Scalar)>;
+    type MessageZ = Vec<(usize, Scalar, Scalar)>;
 
     type ProverContext = Vec<bool>;
 
@@ -149,6 +139,7 @@ impl SigmaProtocol for CDS94 {
                 match state[i].get_challenge() {
                     // Inactive clauses
                     Some(s) => (
+                        i,
                         s,
                         state[i]
                             .get_proof()
@@ -166,7 +157,7 @@ impl SigmaProtocol for CDS94 {
                             &(),
                         );
 
-                        (challenge, proof)
+                        (i, challenge, proof)
                     }
                 }
             })
@@ -184,9 +175,9 @@ impl SigmaProtocol for CDS94 {
         let mut shares: Vec<Share<WrappedScalar>> =
             Vec::with_capacity(statement.n);
 
-        for (i, (m1, (c, m2))) in izip!(a, z).enumerate() {
-            if !Schnorr::verify(&statement.protocols[i], &m1, &c, &m2) {
-                dbg!(false);
+        for (i, c, m2) in z {
+            let m1 = a[*i];
+            if !Schnorr::verify(&statement.protocols[*i], &m1, &c, &m2) {
                 return false;
             }
 
@@ -194,7 +185,6 @@ impl SigmaProtocol for CDS94 {
                 x: WrappedScalar::from((i + 1) as u64),
                 y: WrappedScalar::from(*c),
             };
-            dbg!(share);
             shares.push(share);
         }
 
@@ -206,7 +196,6 @@ impl SigmaProtocol for CDS94 {
         let res = shamir.reconstruct_secret(&shares);
 
         let combined_secret = res.unwrap_or(WrappedScalar::default());
-        dbg!(combined_secret, secret);
 
         combined_secret.0 == *secret && valid
     }
@@ -267,9 +256,6 @@ impl CDS94 {
             .unwrap();
 
         shares.append(&mut missing_shares);
-        shares.sort_by_key(|k| {
-            k.x.to_bytes()
-        });
 
         shares
     }

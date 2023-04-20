@@ -64,16 +64,13 @@ impl ShamirSecretSharing {
     pub fn complete_shares<F>(
         &self,
         secret: &F,
-        shares: &Vec<Share<F>>,
-        xs_to_fill: &Vec<F>,
+        unqualified_shares: &Vec<Share<F>>,
+        remaining_xs: &Vec<F>,
     ) -> Result<Vec<Share<F>>, ShamirError>
     where
         F: PrimeField,
     {
-        // Self::check_params(self.n, self.t,
-        // Some(secret.to_owned()))?;
-
-        if shares.len() != self.threshold - 1 {
+        if unqualified_shares.len() != self.threshold - 1 {
             return Err(ShamirError::InvalidUnqualifiedSet);
         }
 
@@ -83,25 +80,32 @@ impl ShamirSecretSharing {
         x_coordinates.push(F::ZERO);
         y_coordinates.push(*secret);
 
-        for (i, share) in shares
-            .iter()
-            .enumerate()
-        {
+        // Extract x and y coordinates from each share in
+        // unqualified set
+        for share in unqualified_shares.iter() {
             let x = share.x;
+            // Check if x-coordinate is 0
             if x.is_zero()
                 .into()
             {
                 return Err(ShamirError::InvalidShare);
             }
             let y = share.y;
-
+            // Add x and y coordinates to their respective vectors
             x_coordinates.push(x);
             y_coordinates.push(y);
         }
 
+        // Create polynomial with x and y coordinates
         let poly = LagrangePolynomial::init(x_coordinates, y_coordinates)?;
 
-        let challenges = xs_to_fill
+        // Iterate through each x-coordinate in remaining set and
+        // interpolate at each point
+        // Interpolation is a O(n^2) operation where n = size of
+        // threshold = total - active + 1 This outer loop
+        // goes through remaining_xs which is of size = active
+        // So, total complexity is O(n^2 * active)
+        let remaining_shares = remaining_xs
             .iter()
             .map(|x| {
                 let y = poly.interpolate(*x);
@@ -109,7 +113,7 @@ impl ShamirSecretSharing {
             })
             .collect();
 
-        Ok(challenges)
+        Ok(remaining_shares)
     }
 
     /// Reconstructs secret from shares

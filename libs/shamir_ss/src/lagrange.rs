@@ -102,32 +102,4 @@ impl<F: PrimeField> LagrangePolynomial<F> {
         }
         result
     }
-
-    pub fn interpolate2<S>(x_coordinates: &[F], y_coordinates: &[S]) -> S
-    where
-        S: Default + Copy + AddAssign + Mul<F, Output = S>,
-    {
-        let limit = x_coordinates.len();
-        // Initialize to zero
-        let mut result = S::default();
-
-        for i in 0..limit {
-            let mut basis = F::ONE;
-            for j in 0..limit {
-                if i == j {
-                    continue;
-                }
-
-                let mut denom: F = x_coordinates[j] - x_coordinates[i];
-                denom = denom
-                    .invert()
-                    .unwrap();
-                // x_m / (x_m - x_j) * ...
-                basis *= x_coordinates[j] * denom;
-            }
-
-            result += y_coordinates[i] * basis;
-        }
-        result
-    }
 }

@@ -104,7 +104,7 @@ struct VerifierBenchParam {
     pub statement: CDS94,
     pub message_a: Vec<CompressedRistretto>,
     pub challenge: Scalar,
-    pub message_z: Vec<(Scalar, Scalar)>,
+    pub message_z: Vec<(usize, Scalar, Scalar)>,
 }
 
 impl fmt::Display for VerifierBenchParam {
@@ -153,7 +153,7 @@ pub fn cds94_benchmark(c: &mut Criterion) {
         group.measurement_time(Duration::from_secs(10));
 
         let mut message_a: Vec<CompressedRistretto> = Vec::new();
-        let mut message_z: Vec<(Scalar, Scalar)> = Vec::new();
+        let mut message_z: Vec<(usize, Scalar, Scalar)> = Vec::new();
 
         group.bench_with_input(
             BenchmarkId::new("prover_bench", &proverparams),

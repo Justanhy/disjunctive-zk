@@ -86,6 +86,7 @@ pub struct History<G1: PrimeGroup, G2: PrimeGroup, L: Hom<G1::Scalar, G2>> {
     pub past_c: Vec<G1::Scalar>,
 }
 
+#[derive(Clone, Debug)]
 pub struct ComposedStatement<
     G1: PrimeGroup,
     G2: PrimeGroup,
@@ -99,6 +100,7 @@ pub struct ComposedStatement<
     pub g2_public_key: G2, // y_i
 }
 
+#[derive(Clone, Debug)]
 pub struct ComposedA<G1: PrimeGroup, G2: PrimeGroup> {
     pub big_a: G1,
     pub big_b: G1,
@@ -111,6 +113,7 @@ pub struct ComposedState<G2: PrimeGroup> {
     pub b: G2,
 }
 
+#[derive(Clone, Debug)]
 pub struct ComposedZ<G1: PrimeGroup, G2: PrimeGroup, L: Hom<G1::Scalar, G2>> {
     pub new_statement: Option<ComposedStatement<G1, G2, L>>,
     pub new_witnesses: Option<Vec<G1::Scalar>>,

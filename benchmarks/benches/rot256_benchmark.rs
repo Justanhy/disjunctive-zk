@@ -115,22 +115,6 @@ macro_rules! compilen {
         let (pk, sk) = compile!($pks, $sk);
         compilen!(12, pk, sk)
     }};
-    (14, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(13, pk, sk)
-    }};
-    (15, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(14, pk, sk)
-    }};
-    (16, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(15, pk, sk)
-    }};
-    (17, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(16, pk, sk)
-    }};
 }
 
 macro_rules! bench_scheme {
@@ -205,24 +189,8 @@ fn bench_sig8192(b: &mut Bencher) {
     bench_scheme!(b, 13, Sig8192);
 }
 
-fn bench_sig16384(b: &mut Bencher) {
-    bench_scheme!(b, 14, Sig16384);
-}
-
-fn bench_sig32768(b: &mut Bencher) {
-    bench_scheme!(b, 15, Sig32768);
-}
-
-fn bench_sig65536(b: &mut Bencher) {
-    bench_scheme!(b, 16, Sig65536);
-}
-
-fn bench_sig131072(b: &mut Bencher) {
-    bench_scheme!(b, 17, Sig131072);
-}
-
 pub fn rot256_benchmark(c: &mut Criterion) {
-    const N: usize = 12;
+    const N: usize = 13;
     let mut ns: [usize; N] = [0; N];
     for i in 1..=N {
         ns[i - 1] = 1 << i;
@@ -253,16 +221,8 @@ pub fn rot256_benchmark(c: &mut Criterion) {
     group.bench_function("sig2048", bench_sig2048);
     group.throughput(Throughput::Elements(ns[11] as u64));
     group.bench_function("sig4096", bench_sig4096);
-    // group.throughput(Throughput::Elements(ns[12] as u64));
-    // group.bench_function("sig8192", bench_sig8192);
-    // group.throughput(Throughput::Elements(ns[13] as u64));
-    // group.bench_function("sig16384", bench_sig16384);
-    // group.throughput(Throughput::Elements(ns[14] as u64));
-    // group.bench_function("sig32768", bench_sig32768);
-    // group.throughput(Throughput::Elements(ns[15] as u64));
-    // group.bench_function("sig65536", bench_sig65536);
-    // group.throughput(Throughput::Elements(ns[16] as u64));
-    // group.bench_function("sig131072", bench_sig131072);
+    group.throughput(Throughput::Elements(ns[12] as u64));
+    group.bench_function("sig8192", bench_sig8192);
     group.finish();
 }
 

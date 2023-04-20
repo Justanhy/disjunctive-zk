@@ -46,11 +46,11 @@ pub trait SigmaProtocol {
     type Witness;
 
     /// First round message
-    type MessageA;
+    type MessageA: Clone;
     /// Challenge (Second round message)
-    type Challenge;
+    type Challenge: Clone;
     /// Third round message
-    type MessageZ;
+    type MessageZ: Clone;
 
     /// On every protocol execution (i.e. interaction
     /// between the prover and the verifier) there is a

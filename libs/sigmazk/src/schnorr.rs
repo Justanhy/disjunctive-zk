@@ -149,6 +149,19 @@ pub struct SimArgs {
     challenge: Scalar,
 }
 
+impl HVzk for Schnorr {
+    fn simulate(
+        statement: &Self::Statement,
+    ) -> (Self::MessageA, Self::Challenge, Self::MessageZ) {
+        let mut rng = ChaCha20Rng::from_entropy();
+        let z = Scalar::random(&mut rng);
+        let c = Scalar::random(&mut rng);
+        let a =
+            (RISTRETTO_BASEPOINT_TABLE * &z - c * statement.pub_key).compress();
+        (a, c, z)
+    }
+}
+
 /// Implementation of ZeroKnowledge for Schnorr
 impl ZeroKnowledge for Schnorr {
     type Input = SimArgs;

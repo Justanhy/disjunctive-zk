@@ -4,6 +4,7 @@ extern crate rand_core;
 pub extern crate shamir_ss;
 pub extern crate sigmazk;
 pub mod compiler;
+pub mod selfcompiler;
 
 use curve25519_dalek::scalar::Scalar;
 
@@ -242,8 +243,8 @@ pub mod tests {
     fn cds_works() {
         // INIT //
         // number of clauses
-        const N: usize = 256;
-        const D: usize = 1;
+        const N: usize = 512;
+        const D: usize = 256;
         let (
             protocol,
             cdsprover,

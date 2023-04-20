@@ -104,7 +104,7 @@ struct VerifierBenchParam {
     pub statement: CDS94,
     pub message_a: Vec<CompressedRistretto>,
     pub challenge: Scalar,
-    pub message_z: Vec<(Scalar, Scalar)>,
+    pub message_z: Vec<(usize, Scalar, Scalar)>,
 }
 
 impl fmt::Display for VerifierBenchParam {
@@ -123,14 +123,11 @@ impl fmt::Display for VerifierBenchParam {
 }
 
 pub fn cds94_benchmark2(c: &mut Criterion) {
-    const Q: usize = 8;
+    const Q: usize = 9;
     let mut ns: Vec<usize> = vec![0; Q + 1];
     for i in 0..=Q {
         ns[i] = 1 << i;
     }
-    ns[Q] -= 2; // needed due to limitation of 3rd party library for Shamir
-                // let mut threshold_size: Vec<usize> =
-                // Vec::with_capacity(Q);
 
     let mut group = c.benchmark_group("cds94_benchmark2");
     for n in ns.iter() {
@@ -139,7 +136,7 @@ pub fn cds94_benchmark2(c: &mut Criterion) {
             cdsprover,
             cdsverifier,
             active_clauses,
-        } = bench_init(255, *n);
+        } = bench_init(512, *n);
 
         let challenge = Scalar::random(&mut cdsverifier.get_rng());
 
@@ -152,9 +149,10 @@ pub fn cds94_benchmark2(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements(*n as u64));
         group.measurement_time(Duration::from_secs(10));
+        group.sample_size(10);
 
         let mut message_a: Vec<CompressedRistretto> = Vec::new();
-        let mut message_z: Vec<(Scalar, Scalar)> = Vec::new();
+        let mut message_z: Vec<(usize, Scalar, Scalar)> = Vec::new();
 
         group.bench_with_input(
             BenchmarkId::new("prover_bench2", &proverparams),

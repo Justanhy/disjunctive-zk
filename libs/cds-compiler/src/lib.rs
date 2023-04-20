@@ -4,7 +4,7 @@ extern crate rand_core;
 pub extern crate shamir_ss;
 pub extern crate sigmazk;
 pub mod compiler;
-pub mod selfcompiler;
+// pub mod selfcompiler;
 
 use curve25519_dalek::scalar::Scalar;
 

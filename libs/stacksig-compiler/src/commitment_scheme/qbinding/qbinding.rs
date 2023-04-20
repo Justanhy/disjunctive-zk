@@ -22,7 +22,7 @@ impl QBinding {
     where
         F: FnMut(A, usize) -> A,
     {
-        (2..=self.q).fold(init, fold)
+        (3..=self.q).fold(init, fold)
     }
 
     /// Initialise a new 1-of-2^q partially-binding
@@ -65,7 +65,7 @@ impl PartialBindingCommScheme for QBinding {
     /// Setup public parameters
     fn setup<R: CryptoRngCore>(&self, rng: &mut R) -> PublicParams {
         let base = PublicParams {
-            inner: Inner::with_capacity(self.q),
+            inner: Inner::new(HalfBinding.setup(rng)),
             outer: HalfBinding.setup(rng),
         };
         self.fold(base, |inner, _| {

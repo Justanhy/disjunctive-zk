@@ -93,11 +93,11 @@ mod test_selfstacker {
 
     #[test]
     fn third_message_works() {
-        const Q: usize = 13;
+        const Q: usize = 5;
         const CLAUSES: usize = 1 << Q;
         const B: usize = 5;
 
-        let rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
+        let mut rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
         let verifier_rng = &mut ChaCha20Rng::from_entropy();
         let StackerTest {
             s2_statement,
@@ -105,12 +105,8 @@ mod test_selfstacker {
             ..
         } = testinit(rng, CLAUSES, B);
 
-        let (state, message_a) = SelfStacker::first(
-            &s2_statement,
-            &s2_witness,
-            &mut rng.clone(),
-            &(),
-        );
+        let (state, message_a) =
+            SelfStacker::first(&s2_statement, &s2_witness, &mut rng, &());
         let challenge = SelfStacker::<Schnorr>::second(verifier_rng);
         let message_z = SelfStacker::third(
             &s2_statement,

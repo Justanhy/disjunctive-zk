@@ -12,7 +12,7 @@ use rand_core::CryptoRngCore;
 use crate::commitment_scheme::halfbinding::{self, Side};
 use crate::stackable::Message;
 
-pub const MIN_Q: usize = 1;
+pub const MIN_Q: usize = 2;
 /// Defines the binding index for a 1-of-2^q
 /// partially-binding commitment scheme
 #[derive(Copy, Clone, Debug, PartialEq, Hash)]

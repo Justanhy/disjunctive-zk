@@ -1,6 +1,9 @@
 use core::ops::{AddAssign, Mul};
 
 use group::ff::PrimeField;
+use rand::seq::IteratorRandom;
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
 use rand_core::CryptoRngCore;
 
 use crate::lagrange::LagrangePolynomial;
@@ -61,6 +64,64 @@ impl ShamirSecretSharing {
         ))
     }
 
+    pub fn complete_shares_mut<F>(
+        &self,
+        secret: &F,
+        unqualified_shares: &mut Vec<Share<F>>,
+        remaining_xs: &mut Vec<F>,
+    ) -> Result<(), ShamirError>
+    where
+        F: PrimeField,
+    {
+        if unqualified_shares.len() != self.threshold - 1 {
+            return Err(ShamirError::InvalidUnqualifiedSet);
+        }
+
+        let mut x_coordinates: Vec<F> = Vec::with_capacity(self.threshold);
+        let mut y_coordinates: Vec<F> = Vec::with_capacity(self.threshold);
+
+        x_coordinates.push(F::ZERO);
+        y_coordinates.push(*secret);
+
+        // Extract x and y coordinates from each share in
+        // unqualified set
+        for share in unqualified_shares.iter() {
+            let x = share.x;
+            // Check if x-coordinate is 0
+            if x.is_zero()
+                .into()
+            {
+                return Err(ShamirError::InvalidShare);
+            }
+            let y = share.y;
+            // Add x and y coordinates to their respective vectors
+            x_coordinates.push(x);
+            y_coordinates.push(y);
+        }
+
+        // Create polynomial with x and y coordinates
+        let poly = LagrangePolynomial::init(x_coordinates, y_coordinates)?;
+
+        // Iterate through each x-coordinate in remaining set and
+        // interpolate at each point
+        // Interpolation is a O(n^2) operation where n = size of
+        // threshold = total - active + 1 This outer loop
+        // goes through remaining_xs which is of size = active
+        // So, total complexity is O(n^2 * active)
+        unqualified_shares
+            .resize(self.threshold + remaining_xs.len() - 1, Share::default());
+
+        for (i, x) in remaining_xs
+            .iter()
+            .enumerate()
+        {
+            let y = poly.interpolate(*x);
+            unqualified_shares[i] = Share { x: *x, y };
+        }
+
+        Ok(())
+    }
+
     pub fn complete_shares<F>(
         &self,
         secret: &F,
@@ -75,7 +136,7 @@ impl ShamirSecretSharing {
         }
 
         let mut x_coordinates: Vec<F> = Vec::with_capacity(self.threshold);
-        let mut y_coordinates = Vec::with_capacity(self.threshold);
+        let mut y_coordinates: Vec<F> = Vec::with_capacity(self.threshold);
 
         x_coordinates.push(F::ZERO);
         y_coordinates.push(*secret);
@@ -128,6 +189,12 @@ impl ShamirSecretSharing {
         if shares.len() < self.threshold {
             return Err(ShamirError::NotEnoughShares);
         }
+        // let (xs, ys): (Vec<F>, Vec<F>) = shares
+        //     .iter()
+        //     .choose_multiple(&mut ChaCha20Rng::from_entropy(),
+        // self.threshold)     .into_iter()
+        //     .map(|share| (share.x, share.y))
+        //     .unzip();
         let (xs, ys): (Vec<F>, Vec<F>) = shares
             .iter()
             .map(|share| (share.x, share.y))

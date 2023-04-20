@@ -48,7 +48,7 @@ impl<T: Clone> Inner<T> {
         if self
             .0
             .len()
-            < 1
+            < 2
         {
             return None;
         }
@@ -100,6 +100,8 @@ pub trait InnerOuter<T: Clone + Debug> {
     /// Get the first element of the inner vector which is
     /// usually the innermost T
     fn base_inner(&self) -> &T {
-        self.get_outer()
+        self.get_inner()
+            .first()
+            .unwrap()
     }
 }

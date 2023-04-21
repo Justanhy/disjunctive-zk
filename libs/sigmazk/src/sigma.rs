@@ -30,9 +30,9 @@ use rand_core::CryptoRngCore;
 //     }
 // }
 
-// pub trait Challenge {
-//     fn new(bytes: &[u8; 64]) -> Self;
-// }
+pub trait Challenge {
+    fn new(bytes: &[u8; 64]) -> Self;
+}
 
 /// Trait for Sigma protocols
 ///
@@ -48,7 +48,7 @@ pub trait SigmaProtocol {
     /// First round message
     type MessageA: Clone;
     /// Challenge (Second round message)
-    type Challenge: Clone;
+    type Challenge: Clone + Challenge;
     /// Third round message
     type MessageZ: Clone;
 
@@ -59,17 +59,13 @@ pub trait SigmaProtocol {
     /// that may be used (usually by the prover in the third
     /// round).
     type State;
-    /// Contextual information that is private to the prover
-    /// but required by the protocol.
-    type ProverContext;
 
     /// The first message in a Sigma protocol (sent by the
     /// Prover).
-    fn first<R: CryptoRngCore>(
+    fn first<R: CryptoRngCore + Clone>(
         statement: &Self::Statement,
         witness: &Self::Witness,
         prover_rng: &mut R,
-        prover_context: &Self::ProverContext,
     ) -> (Self::State, Self::MessageA)
     where
         Self: Sized;
@@ -79,19 +75,20 @@ pub trait SigmaProtocol {
     ///
     /// Usually, this is a challenge sent by the Verifier to
     /// the Prover.
-    fn second<R: CryptoRngCore>(verifier_rng: &mut R) -> Self::Challenge
+    fn second<R: CryptoRngCore + Clone>(
+        verifier_rng: &mut R,
+    ) -> Self::Challenge
     where
         Self: Sized;
 
     /// The third message in a Sigma protocol (sent by the
     /// Prover).
-    fn third<R: CryptoRngCore>(
+    fn third<R: CryptoRngCore + Clone>(
         statement: &Self::Statement,
         state: Self::State,
         witness: &Self::Witness,
         challenge: &Self::Challenge,
         prover_rng: &mut R,
-        prover_context: &Self::ProverContext,
     ) -> Self::MessageZ
     where
         Self: Sized;

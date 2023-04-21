@@ -36,12 +36,8 @@ mod tests {
         let prover = SchnorrProver::new(&provers_witness);
         let verifier = SchnorrVerifier::new();
 
-        let (state, commitment) = Schnorr::first(
-            &protocol,
-            &provers_witness,
-            &mut prover.get_rng(),
-            &(),
-        );
+        let (state, commitment) =
+            Schnorr::first(&protocol, &provers_witness, &mut prover.get_rng());
 
         let challenge = Schnorr::second(&mut verifier.get_rng());
 
@@ -51,7 +47,6 @@ mod tests {
             &provers_witness,
             &challenge,
             &mut prover.get_rng(),
-            &(),
         );
 
         let result =
@@ -70,12 +65,8 @@ mod tests {
         let prover = SchnorrProver::new(&provers_witness);
         let verifier = SchnorrVerifier::new();
 
-        let (state, commitment) = Schnorr::first(
-            &protocol,
-            &provers_witness,
-            &mut prover.get_rng(),
-            &(),
-        );
+        let (state, commitment) =
+            Schnorr::first(&protocol, &provers_witness, &mut prover.get_rng());
 
         let challenge = Schnorr::second(&mut verifier.get_rng());
 
@@ -85,7 +76,6 @@ mod tests {
             &provers_witness,
             &challenge,
             &mut prover.get_rng(),
-            &(),
         );
 
         let result =

@@ -264,13 +264,11 @@ impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
     type MessageA = StackedA;
     type Challenge = S::Challenge;
     type MessageZ = StackedZ<S>;
-    type ProverContext = S::ProverContext;
 
-    fn first<R: CryptoRngCore>(
+    fn first<R: CryptoRngCore + Clone>(
         statement: &StackedStatement<S>,
         witness: &StackedWitness<S::Witness>,
         prover_rng: &mut R,
-        prover_context: &S::ProverContext,
     ) -> (Self::State, Self::MessageA) {
         let StackedWitness {
             nested_witness,
@@ -281,7 +279,6 @@ impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
             statement.bound_statement(binding),
             nested_witness,
             prover_rng,
-            prover_context,
         );
         // Instance of partial binding commitment scheme that we
         // will use
@@ -335,13 +332,12 @@ impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
         Challenge::new(&buffer)
     }
 
-    fn third<R: CryptoRngCore>(
+    fn third<R: CryptoRngCore + Clone>(
         statement: &Self::Statement,
         state: Self::State,
         witness: &Self::Witness,
         challenge: &Self::Challenge,
         prover_rng: &mut R,
-        prover_context: &S::ProverContext,
     ) -> Self::MessageZ {
         let StackedState {
             nested_state,
@@ -364,7 +360,6 @@ impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
             nested_witness,
             challenge,
             prover_rng,
-            prover_context,
         );
 
         let new_messages: Vec<Rc<S::MessageA>> = (0..statement.clauses())

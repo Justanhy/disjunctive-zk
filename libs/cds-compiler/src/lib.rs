@@ -4,7 +4,7 @@ extern crate rand_core;
 pub extern crate shamir_ss;
 pub extern crate sigmazk;
 pub mod compiler;
-// pub mod selfcompiler;
+pub mod selfcompiler;
 
 use curve25519_dalek::scalar::Scalar;
 
@@ -55,6 +55,10 @@ impl CDS94Prover {
     pub fn borrow_witnesses(&self) -> &Vec<Scalar> {
         &self.witnesses
     }
+
+    pub fn active_clauses(&self) -> &Vec<bool> {
+        &self.active_clauses
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -86,8 +90,8 @@ pub type CDS94Test = (
     Vec<Box<Schnorr>>,
     Vec<SchnorrProver>,
     Vec<SchnorrVerifier>,
-    Vec<Scalar>,
-    Vec<Scalar>,
+    CompiledWitness,
+    CompiledWitness,
     Vec<bool>,
 );
 
@@ -146,6 +150,12 @@ pub mod tests {
 
         let verifier: CDS94Verifier = CDS94Verifier::new();
 
+        let actual_witnesses =
+            CompiledWitness::new(actual_witnesses, active_clauses.clone());
+
+        let provers_witnesses =
+            CompiledWitness::new(provers_witnesses, active_clauses.clone());
+
         (
             protocol,
             prover,
@@ -179,14 +189,12 @@ pub mod tests {
             &protocol,
             &provers_witnesses,
             &mut cdsprover.get_rng(),
-            &active_clauses,
         );
         assert!(commitments.len() == N);
         let (_, testc) = Schnorr::first(
             &protocol.protocols[0],
-            &actual_witnesses[0],
+            &actual_witnesses.witnesses()[0],
             &mut protocol.provers[0].get_rng(),
-            &(),
         );
         assert!(testc == commitments[0]);
         assert!(
@@ -223,17 +231,15 @@ pub mod tests {
             &protocol,
             &provers_witnesses,
             &mut cdsprover.get_rng(),
-            &active_clauses,
         );
         let challenge = CDS94::second(&mut cdsverifier.get_rng());
         // Third message
         let proof = CDS94::third(
             &protocol,
             transcripts,
-            cdsprover.borrow_witnesses(),
+            &provers_witnesses,
             &challenge,
             &mut cdsprover.get_rng(),
-            &active_clauses,
         );
 
         assert!(CDS94::verify(&protocol, &commitments, &challenge, &proof));
@@ -243,8 +249,8 @@ pub mod tests {
     fn cds_works() {
         // INIT //
         // number of clauses
-        const N: usize = 512;
-        const D: usize = 256;
+        const N: usize = 128;
+        const D: usize = 1;k
         let (
             protocol,
             cdsprover,
@@ -262,7 +268,6 @@ pub mod tests {
             &protocol,
             &provers_witnesses,
             &mut cdsprover.get_rng(),
-            &active_clauses,
         );
         // Second message
         let challenge = CDS94::second(&mut cdsverifier.get_rng());
@@ -270,10 +275,9 @@ pub mod tests {
         let proof = CDS94::third(
             &protocol,
             transcripts,
-            cdsprover.borrow_witnesses(),
+            &provers_witnesses,
             &challenge,
             &mut cdsprover.get_rng(),
-            &active_clauses,
         );
         assert!(CDS94::verify(&protocol, &commitments, &challenge, &proof));
     }

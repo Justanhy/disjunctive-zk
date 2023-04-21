@@ -118,13 +118,10 @@ impl SigmaProtocol for Schnorr {
     type Challenge = Scalar;
     type MessageZ = Scalar;
 
-    type ProverContext = ();
-
     fn first<R: CryptoRngCore>(
         _statement: &Schnorr,
         _witness: &Scalar,
         prover_rng: &mut R,
-        _: &(),
     ) -> (Self::State, Self::MessageA) {
         let state = Scalar::random(prover_rng);
         let message = &state * RISTRETTO_BASEPOINT_TABLE;
@@ -141,7 +138,6 @@ impl SigmaProtocol for Schnorr {
         witness: &Scalar,
         challenge: &Scalar,
         prover_rng: &mut R,
-        _: &(),
     ) -> Self::MessageZ {
         // TODO: Allow use with state (remove re-computation)
         challenge * witness + Scalar::random(prover_rng)

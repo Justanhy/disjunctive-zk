@@ -157,14 +157,13 @@ pub fn stacksig_benchmark(c: &mut Criterion) {
                         .rng
                         .clone();
                     let (state, a) =
-                        SelfStacker::first(&p.statement, &p.witness, rng, &());
+                        SelfStacker::first(&p.statement, &p.witness, rng);
                     let z = SelfStacker::third(
                         &p.statement,
                         state,
                         &p.witness,
                         &p.challenge,
                         rng,
-                        &(),
                     );
                     // Should have negligible cost
                     message_a = a;

@@ -89,6 +89,12 @@ impl SigmaVerifier<ChaCha20Rng> for SchnorrVerifier {
     }
 }
 
+impl Challenge for Scalar {
+    fn new(bytes: &[u8; 64]) -> Self {
+        Scalar::from_bytes_mod_order_wide(bytes)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Schnorr {
     pub pub_key: RistrettoPoint,
@@ -103,13 +109,10 @@ impl SigmaProtocol for Schnorr {
     type Challenge = Scalar;
     type MessageZ = Scalar;
 
-    type ProverContext = ();
-
     fn first<R: CryptoRngCore>(
         _statement: &Schnorr,
         _witness: &Scalar,
         prover_rng: &mut R,
-        _: &(),
     ) -> (Self::State, Self::MessageA) {
         let state = Scalar::random(prover_rng);
         let message = &state * RISTRETTO_BASEPOINT_TABLE;
@@ -126,7 +129,6 @@ impl SigmaProtocol for Schnorr {
         witness: &Scalar,
         challenge: &Scalar,
         prover_rng: &mut R,
-        _: &(),
     ) -> Self::MessageZ {
         // TODO: Allow use with state (remove re-computation)
         challenge * witness + Scalar::random(prover_rng)

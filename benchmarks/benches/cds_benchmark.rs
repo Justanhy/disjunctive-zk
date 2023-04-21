@@ -12,12 +12,13 @@ use curve25519_dalek::scalar::Scalar;
 use rand_chacha::ChaCha20Rng;
 use rand_core::SeedableRng;
 use sigmazk::*;
+use stacksig_compiler::compiler::Compiled;
 
 struct CDS94Benchmark {
     protocol: CDS94,
     cdsprover: CDS94Prover,
     cdsverifier: CDS94Verifier,
-    active_clauses: Vec<bool>,
+    witness: CompiledWitness,
 }
 
 fn bench_init(n: usize, d: usize) -> CDS94Benchmark {
@@ -67,6 +68,7 @@ fn bench_init(n: usize, d: usize) -> CDS94Benchmark {
     let protocol = CDS94::init(d, n, &protocols, &provers, &verifiers);
     let prover: CDS94Prover =
         CDS94Prover::new(n, &provers_witnesses, &active_clauses);
+    let witness = CompiledWitness::new(provers_witnesses, active_clauses);
 
     let verifier: CDS94Verifier = CDS94Verifier::new();
 
@@ -74,14 +76,14 @@ fn bench_init(n: usize, d: usize) -> CDS94Benchmark {
         protocol,
         cdsprover: prover,
         cdsverifier: verifier,
-        active_clauses,
+        witness,
     }
 }
 
 struct ProverBenchParam {
     protocol: CDS94,
     prover: CDS94Prover,
-    active_clauses: Vec<bool>,
+    witness: CompiledWitness,
     challenge: Scalar,
 }
 
@@ -137,7 +139,7 @@ pub fn cds94_benchmark(c: &mut Criterion) {
             protocol,
             cdsprover,
             cdsverifier,
-            active_clauses,
+            witness,
         } = bench_init(*n, 1);
 
         let challenge = Scalar::random(&mut cdsverifier.get_rng());
@@ -145,7 +147,7 @@ pub fn cds94_benchmark(c: &mut Criterion) {
         let mut proverparams: ProverBenchParam = ProverBenchParam {
             protocol: protocol.clone(),
             prover: cdsprover,
-            active_clauses,
+            witness,
             challenge,
         };
 
@@ -162,23 +164,19 @@ pub fn cds94_benchmark(c: &mut Criterion) {
                 b.iter(|| {
                     let (transcripts, commitments) = CDS94::first(
                         &s.protocol,
-                        s.prover
-                            .borrow_witnesses(),
+                        &s.witness,
                         &mut s
                             .prover
                             .get_rng(),
-                        &s.active_clauses,
                     );
                     let proof = CDS94::third(
                         &s.protocol,
                         transcripts,
-                        s.prover
-                            .borrow_witnesses(),
+                        &s.witness,
                         &s.challenge,
                         &mut s
                             .prover
                             .get_rng(),
-                        &s.active_clauses,
                     );
                     // Should have negligible cost
                     message_a = commitments;

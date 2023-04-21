@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+sigmazk = { path = "../sigmazk" }
 curve25519-dalek = { verion = "4.0.0-rc.0", features = ["rand_core", "digest"] }
 group = "0.13.0"
 rand = "0.8.4"

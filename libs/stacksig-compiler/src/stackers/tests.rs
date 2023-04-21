@@ -79,14 +79,10 @@ mod test_selfstacker {
             ..
         } = testinit(rng, CLAUSES, B);
 
-        let (state, message_a) = SelfStacker::first(
-            &s2_statement,
-            &s2_witness,
-            &mut rng.clone(),
-            &(),
-        );
+        let (state, message_a) =
+            SelfStacker::first(&s2_statement, &s2_witness, &mut rng.clone());
         let (actual_state, actual_a) =
-            SelfStacker::first(&s2_statement, &valid_witness, rng, &());
+            SelfStacker::first(&s2_statement, &valid_witness, rng);
         assert!(message_a == actual_a);
         assert!(state == actual_state);
     }
@@ -97,7 +93,7 @@ mod test_selfstacker {
         const CLAUSES: usize = 1 << Q;
         const B: usize = 5;
 
-        let mut rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
+        let rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
         let verifier_rng = &mut ChaCha20Rng::from_entropy();
         let StackerTest {
             s2_statement,
@@ -106,7 +102,7 @@ mod test_selfstacker {
         } = testinit(rng, CLAUSES, B);
 
         let (state, message_a) =
-            SelfStacker::first(&s2_statement, &s2_witness, &mut rng, &());
+            SelfStacker::first(&s2_statement, &s2_witness, &mut rng.clone());
         let challenge = SelfStacker::<Schnorr>::second(verifier_rng);
         let message_z = SelfStacker::third(
             &s2_statement,
@@ -114,7 +110,6 @@ mod test_selfstacker {
             &s2_witness,
             &challenge,
             rng,
-            &(),
         );
         assert!(SelfStacker::verify(
             &s2_statement,
@@ -138,12 +133,8 @@ mod test_selfstacker {
             ..
         } = testinit(rng, CLAUSES, B);
 
-        let (state, message_a) = SelfStacker::first(
-            &s2_statement,
-            &s2_witness,
-            &mut rng.clone(),
-            &(),
-        );
+        let (state, message_a) =
+            SelfStacker::first(&s2_statement, &s2_witness, &mut rng.clone());
         let given_challenge = SelfStacker::<Schnorr>::second(verifier_rng);
         let spoof_challenge =
             SelfStacker::<Schnorr>::second(&mut ChaCha20Rng::from_entropy());
@@ -154,7 +145,6 @@ mod test_selfstacker {
             &s2_witness,
             &spoof_challenge,
             rng,
-            &(),
         );
         assert!(!SelfStacker::verify(
             &s2_statement,

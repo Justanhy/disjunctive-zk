@@ -46,9 +46,35 @@ type SigTrans = Box<
     >,
 >;
 
+pub struct CompiledWitness {
+    witnesses: Vec<Scalar>,
+    active_clauses: Vec<bool>,
+}
+
+impl CompiledWitness {
+    pub fn new(witnesses: Vec<Scalar>, active_clauses: Vec<bool>) -> Self {
+        Self {
+            witnesses,
+            active_clauses,
+        }
+    }
+
+    pub fn witnesses(&self) -> &Vec<Scalar> {
+        &self.witnesses
+    }
+
+    pub fn active_clauses(&self) -> &Vec<bool> {
+        &self.active_clauses
+    }
+
+    pub fn pattern_match(&self) -> (&Vec<Scalar>, &Vec<bool>) {
+        (&self.witnesses, &self.active_clauses)
+    }
+}
+
 impl SigmaProtocol for CDS94 {
     type Statement = CDS94;
-    type Witness = Vec<Scalar>;
+    type Witness = CompiledWitness;
     // type State = Vec<Box<SchnorrTranscript>>; // dyn
     // SigmaTranscript<MessageA = RistrettoPoint, Challenge =
     // Scalar, MessageZ = Scalar>
@@ -58,14 +84,12 @@ impl SigmaProtocol for CDS94 {
     type Challenge = Scalar;
     type MessageZ = Vec<(usize, Scalar, Scalar)>;
 
-    type ProverContext = Vec<bool>;
-
     fn first<R: CryptoRngCore>(
         statement: &CDS94,
-        _witness: &Self::Witness,
+        witness: &Self::Witness,
         _prover_rng: &mut R,
-        active_clauses: &Vec<bool>,
     ) -> (Self::State, Self::MessageA) {
+        let active_clauses = witness.active_clauses();
         assert!(active_clauses.len() == statement.n);
 
         let mut commitment: Self::MessageA = Vec::with_capacity(statement.n);
@@ -79,7 +103,6 @@ impl SigmaProtocol for CDS94 {
                         &statement.protocols[i],
                         &Scalar::default(),
                         &mut statement.provers[i].get_rng(),
-                        &(),
                     );
                     Box::new(SchnorrTranscript {
                         commitment: Some(commitment),
@@ -96,16 +119,7 @@ impl SigmaProtocol for CDS94 {
                 ret
             })
             .collect();
-        // let mut _error: Option<Error> = None; // For error
-        // propagation
 
-        // let commitment: Self::MessageA = transcripts
-        //     .iter()
-        //     .map(|t| {
-        //         t.get_commitment()
-        //             .expect("Commitment should be present")
-        //     })
-        //     .collect();
         (transcripts, commitment)
     }
 
@@ -119,8 +133,8 @@ impl SigmaProtocol for CDS94 {
         witness: &Self::Witness,
         challenge: &Self::Challenge,
         prover_rng: &mut R,
-        active_clauses: &Vec<bool>,
     ) -> Self::MessageZ {
+        let (witnesses, active_clauses) = witness.pattern_match();
         let shares =
             CDS94::fill_missing_shares(&state, *challenge, active_clauses);
 
@@ -151,10 +165,9 @@ impl SigmaProtocol for CDS94 {
                         let proof = Schnorr::third(
                             &statement.protocols[i],
                             Scalar::default(),
-                            &witness[i],
+                            &witnesses[i],
                             &challenge,
                             &mut statement.provers[i].get_rng(),
-                            &(),
                         );
 
                         (i, challenge, proof)

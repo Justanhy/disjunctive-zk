@@ -15,7 +15,7 @@ use crate::stackable::Message;
 pub const MIN_Q: usize = 2;
 /// Defines the binding index for a 1-of-2^q
 /// partially-binding commitment scheme
-#[derive(Copy, Clone, Debug, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BindingIndex {
     q: usize,
     length: usize,
@@ -23,7 +23,10 @@ pub struct BindingIndex {
 }
 
 impl fmt::Display for BindingIndex {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         write!(
             f,
             "BindingIndex {{ 
@@ -38,6 +41,7 @@ impl fmt::Display for BindingIndex {
 
 impl BindingIndex {
     pub fn new(q: usize, index: usize) -> Self {
+        dbg!(q);
         assert!(q >= MIN_Q);
         let length = 1 << q; // 2^q
         assert!(index < length);
@@ -71,7 +75,7 @@ impl BindingIndex {
 
     pub fn base_inner(&self) -> Option<Side> {
         if self.is_base() {
-            match self.index {
+            match self.get_inner_raw() {
                 0 => Some(Side::One),
                 1 => Some(Side::Two),
                 _ => None,
@@ -109,7 +113,9 @@ pub struct PublicParams {
     outer: halfbinding::PublicParams,
 }
 
-impl InnerOuter<halfbinding::PublicParams> for PublicParams {
+impl InnerOuter<halfbinding::PublicParams>
+    for PublicParams
+{
     type Fields = ();
 
     fn init(
@@ -123,7 +129,9 @@ impl InnerOuter<halfbinding::PublicParams> for PublicParams {
         }
     }
 
-    fn get_inner(&self) -> &Inner<halfbinding::PublicParams> {
+    fn get_inner(
+        &self,
+    ) -> &Inner<halfbinding::PublicParams> {
         &self.inner
     }
 
@@ -132,7 +140,7 @@ impl InnerOuter<halfbinding::PublicParams> for PublicParams {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Hash, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct CommitKey {
     pub inner_ck: Inner<halfbinding::CommitKey>,
     pub outer_ck: halfbinding::CommitKey,
@@ -189,7 +197,7 @@ impl Message for CommitKey {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Randomness {
     pub inner: Inner<halfbinding::Randomness>,
     pub outer: halfbinding::Randomness,
@@ -219,21 +227,30 @@ impl InnerOuter<halfbinding::Randomness> for Randomness {
 }
 
 impl Inner<halfbinding::Randomness> {
-    pub fn random<R: CryptoRngCore>(rng: &mut R, q: usize) -> Self {
+    pub fn random<R: CryptoRngCore>(
+        rng: &mut R,
+        q: usize,
+    ) -> Self {
         Self(vec![halfbinding::Randomness::random(rng); q])
     }
 }
 
 impl Randomness {
-    pub fn random<R: CryptoRngCore>(rng: &mut R, q: usize) -> Self {
+    pub fn random<R: CryptoRngCore>(
+        rng: &mut R,
+        q: usize,
+    ) -> Self {
         Randomness {
-            inner: Inner::<halfbinding::Randomness>::random(rng, q - 1),
+            inner: Inner::<halfbinding::Randomness>::random(
+                rng,
+                q - 1,
+            ),
             outer: halfbinding::Randomness::random(rng),
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct EquivKey {
     inner_ek: Inner<halfbinding::EquivKey>,
     outer_ek: halfbinding::EquivKey,
@@ -261,7 +278,9 @@ impl EquivKey {
                 .get_inner(),
         );
 
-        <Self as InnerOuter<halfbinding::EquivKey>>::extract(&self, initial)
+        <Self as InnerOuter<halfbinding::EquivKey>>::extract(
+            &self, initial,
+        )
     }
 }
 

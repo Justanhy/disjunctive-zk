@@ -108,6 +108,7 @@ pub struct ComposedA<G1: PrimeGroup, G2: PrimeGroup> {
     pub b: G2,
 }
 
+#[derive(Clone, Debug)]
 pub struct ComposedState<G2: PrimeGroup> {
     pub a: G2,
     pub b: G2,

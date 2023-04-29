@@ -1,13 +1,6 @@
 //! Traits for Zero Knowledge
-use crate::{SigmaProtocol, SigmaTranscript};
 
-/// deprecated
-pub trait ZeroKnowledge {
-    type Input;
-    type Output: SigmaTranscript;
-
-    fn simulate(args: Self::Input) -> Self::Output;
-}
+use crate::SigmaProtocol;
 
 pub trait HVzk: SigmaProtocol {
     fn simulate(

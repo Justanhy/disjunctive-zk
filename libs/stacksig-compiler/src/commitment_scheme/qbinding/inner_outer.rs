@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-#[derive(Clone, Debug, PartialEq, Hash, Default)]
+#[derive(Clone, Debug, PartialEq, Hash, Default, Eq)]
 pub struct Inner<T: Clone>(pub Vec<T>);
 
 impl<T: Clone> Inner<T> {
@@ -67,7 +67,11 @@ impl<T: Clone> Inner<T> {
 pub trait InnerOuter<T: Clone + Debug> {
     type Fields;
 
-    fn init(inner: &Inner<T>, outer: &T, rest: &Self::Fields) -> Self;
+    fn init(
+        inner: &Inner<T>,
+        outer: &T,
+        rest: &Self::Fields,
+    ) -> Self;
     fn get_inner(&self) -> &Inner<T>;
     fn get_outer(&self) -> &T;
     /// Composes the inner and outer components into

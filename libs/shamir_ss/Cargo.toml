@@ -6,10 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-vsss-rs = { version="2.1.0", features=["std"] }
 curve25519-dalek = { version = "4.0.0-rc.0", features = ["rand_core", "digest"] }
 wrapped-ristretto = { path = "../wrapped-ristretto" }
-curve25519-dalek-ml = "4.0.0"
 group = "0.13.0"
 rand = "0.8.4"
 rand_core = "0.6.3"

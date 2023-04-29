@@ -1,4 +1,11 @@
-use curve25519_dalek::constants::{self, RISTRETTO_BASEPOINT_TABLE};
+//! This source code file is originally authored by Mathias Hall-Andersen and
+//! licensed under the GPL v3 License. The source code is hosted on
+//! https://github.com/rot256/research-stacksig.
+//!
+//! 29 April 2023 -- Modified by Justin Tan.
+use curve25519_dalek::constants::{
+    self, RISTRETTO_BASEPOINT_TABLE,
+};
 use curve25519_dalek::ristretto::{
     CompressedRistretto, RistrettoBasepointTable,
 };
@@ -9,13 +16,13 @@ use std::convert::TryInto;
 
 use sha2::{Digest, Sha512};
 
-use crate::stack::Message;
-use crate::Side;
-
 use std::fmt;
 use std::io::Write;
 
 use std::rc::Rc;
+
+use super::r256stack::Message;
+use super::Side;
 
 impl Default for CommitKey {
     fn default() -> Self {
@@ -57,7 +64,10 @@ impl Message for Commitment {
     }
 }
 
-fn feistel_round(l: [u8; 16], mut r: [u8; 16]) -> ([u8; 16], [u8; 16]) {
+fn feistel_round(
+    l: [u8; 16],
+    mut r: [u8; 16],
+) -> ([u8; 16], [u8; 16]) {
     let mut hasher = Sha512::new();
     hasher.update(l);
     let pad = hasher.finalize();
@@ -120,10 +130,16 @@ impl Trapdoor {
 }
 
 #[derive(Clone)]
-pub struct CommitKey(Rc<RistrettoBasepointTable>, Rc<RistrettoBasepointTable>);
+pub struct CommitKey(
+    Rc<RistrettoBasepointTable>,
+    Rc<RistrettoBasepointTable>,
+);
 
 impl fmt::Debug for CommitKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         f.debug_struct("CommitKey")
             .field(
                 "left",
@@ -166,9 +182,10 @@ impl CommitKey {
                         r.compress()
                             .as_bytes(),
                     );
-                    if let Some(l) = CompressedRistretto::from_slice(&li)
-                        .unwrap()
-                        .decompress()
+                    if let Some(l) =
+                        CompressedRistretto::from_slice(&li)
+                            .unwrap()
+                            .decompress()
                     {
                         break (td, l, r);
                     }
@@ -179,9 +196,10 @@ impl CommitKey {
                         l.compress()
                             .as_bytes(),
                     );
-                    if let Some(r) = CompressedRistretto::from_slice(&ri)
-                        .unwrap()
-                        .decompress()
+                    if let Some(r) =
+                        CompressedRistretto::from_slice(&ri)
+                            .unwrap()
+                            .decompress()
                     {
                         break (td, l, r);
                     }
@@ -190,8 +208,12 @@ impl CommitKey {
         };
         (
             CommitKey(
-                Rc::new(RistrettoBasepointTable::create(&l)),
-                Rc::new(RistrettoBasepointTable::create(&r)),
+                Rc::new(RistrettoBasepointTable::create(
+                    &l,
+                )),
+                Rc::new(RistrettoBasepointTable::create(
+                    &r,
+                )),
             ),
             Trapdoor { td },
         )
@@ -203,7 +225,8 @@ impl CommitKey {
         values: (Option<&M1>, Option<&M2>),
     ) -> Commitment {
         // add randomness
-        let comm = random * constants::RISTRETTO_BASEPOINT_TABLE;
+        let comm =
+            random * constants::RISTRETTO_BASEPOINT_TABLE;
 
         // add first element
         let comm = values
@@ -232,9 +255,10 @@ mod tests {
     #[test]
     fn test_perm_inv() {
         let v: [u8; 32] = [
-            0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32,
-            0x11, 0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32, 0x11, 0x42, 0x64,
-            0x32, 0x11, 0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32, 0x11,
+            0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32, 0x11,
+            0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32, 0x11,
+            0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32, 0x11,
+            0x42, 0x64, 0x32, 0x11, 0x42, 0x64, 0x32, 0x11,
         ];
         let pv = perm(&v);
         assert_eq!(v, perm_inv(&pv));

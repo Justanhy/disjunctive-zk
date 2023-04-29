@@ -2,13 +2,13 @@ use std::fmt::Display;
 
 use benchmarks::{plot_dir, plot_proofsize};
 use criterion::{
-    criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
+    criterion_group, criterion_main, BenchmarkId,
+    Criterion, Throughput,
 };
 use curve25519_dalek::scalar::Scalar;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
-use sigmazk::SigmaProtocol;
-use stacksig_compiler::stackable::schnorr::Schnorr;
+use sigmazk::{Schnorr, SigmaProtocol};
 use stacksig_compiler::stackable::Message;
 use stacksig_compiler::stackers::*;
 
@@ -35,11 +35,13 @@ fn bench_init(
     let provers_witness = Scalar::from_bits([0u8; 32]);
     // Initialise base sigma + remaining sigma instances
     let base_schnorr = Schnorr::init(actual_witness);
-    let dummy_schnorr =
-        Schnorr::init(Scalar::random(&mut ChaCha20Rng::from_entropy()));
+    let dummy_schnorr = Schnorr::init(Scalar::random(
+        &mut ChaCha20Rng::from_entropy(),
+    ));
 
     // Initialise stacked sigma protocol
-    let stackedsigma = SelfStacker::new(clauses, base_schnorr);
+    let stackedsigma =
+        SelfStacker::new(clauses, base_schnorr);
     // Setup public parameters
     let (qbinding, binding_index) =
         QBinding::init(stackedsigma.q(), binding_index);
@@ -50,11 +52,18 @@ fn bench_init(
         vec![dummy_schnorr; stackedsigma.clauses()]; // TODO: Might cause stackoverflow
     statements[binding_index.index()] = base_schnorr;
     let s2_statement: StackedStatement<Schnorr> =
-        StackedStatement::new(pp, stackedsigma.q(), statements);
+        StackedStatement::new(
+            pp,
+            stackedsigma.q(),
+            statements,
+        );
 
     // Setup stacked witness
     let s2_witness: StackedWitness<Scalar> =
-        StackedWitness::init(provers_witness, binding_index);
+        StackedWitness::init(
+            provers_witness,
+            binding_index,
+        );
     let valid_witness: StackedWitness<Scalar> =
         StackedWitness::init(actual_witness, binding_index);
 
@@ -76,7 +85,10 @@ struct ProverBenchParam {
 }
 
 impl Display for ProverBenchParam {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
         write!(
             f,
             "<q: {}, clauses: {}>",
@@ -96,7 +108,10 @@ struct VerifierBenchParam {
 }
 
 impl Display for VerifierBenchParam {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
         write!(
             f,
             "<q: {}, clauses: {}>",
@@ -115,12 +130,13 @@ pub fn stacksig_benchmark(c: &mut Criterion) {
         ns[i - 2] = 1 << i;
     }
     let samples = [
-        100, 100, 100, 100, 100, 100, 100, 60, 30, 10, 10, 10, 10, 10, 10, 10,
-        10, 10, 10, 10,
+        100, 100, 100, 100, 100, 100, 100, 60, 30, 10, 10,
+        10, 10, 10, 10, 10, 10, 10, 10, 10,
     ];
     const BINDING: usize = 1;
 
-    let mut communication_sizes: Vec<usize> = Vec::with_capacity(Q - 1);
+    let mut communication_sizes: Vec<usize> =
+        Vec::with_capacity(Q - 1);
 
     let mut group = c.benchmark_group("stacksig_benchmark");
     for (i, n) in ns
@@ -131,33 +147,46 @@ pub fn stacksig_benchmark(c: &mut Criterion) {
             s2_statement,
             s2_witness,
             ..
-        } = bench_init(&mut ChaCha20Rng::from_entropy(), *n, BINDING);
+        } = bench_init(
+            &mut ChaCha20Rng::from_entropy(),
+            *n,
+            BINDING,
+        );
 
         let rng = ChaCha20Rng::from_entropy();
-        let challenge =
-            SelfStacker::<Schnorr>::second(&mut ChaCha20Rng::from_entropy());
-        let mut prover_params: ProverBenchParam = ProverBenchParam {
-            statement: s2_statement,
-            witness: s2_witness,
-            challenge,
-            rng,
-        };
+        let challenge = SelfStacker::<Schnorr>::second(
+            &mut ChaCha20Rng::from_entropy(),
+        );
+        let mut prover_params: ProverBenchParam =
+            ProverBenchParam {
+                statement: s2_statement,
+                witness: s2_witness,
+                challenge,
+                rng,
+            };
 
-        let mut message_z: StackedZ<Schnorr> = StackedZ::default();
+        let mut message_z: StackedZ<Schnorr> =
+            StackedZ::default();
         let mut message_a: StackedA = StackedA::default();
         group.sample_size(samples[i]);
         group.throughput(Throughput::Elements(*n as u64));
         // Benchmark the prover
         group.bench_with_input(
-            BenchmarkId::new("prover_bench", &prover_params),
+            BenchmarkId::new(
+                "prover_bench",
+                &prover_params,
+            ),
             &mut prover_params,
             |b, p| {
                 b.iter(|| {
                     let rng = &mut p
                         .rng
                         .clone();
-                    let (state, a) =
-                        SelfStacker::first(&p.statement, &p.witness, rng);
+                    let (state, a) = SelfStacker::first(
+                        &p.statement,
+                        &p.witness,
+                        rng,
+                    );
                     let z = SelfStacker::third(
                         &p.statement,
                         state,
@@ -172,8 +201,11 @@ pub fn stacksig_benchmark(c: &mut Criterion) {
             },
         );
 
-        communication_sizes
-            .push(message_a.size() + message_z.size() + challenge.size());
+        communication_sizes.push(
+            message_a.size()
+                + message_z.size()
+                + challenge.size(),
+        );
 
         let mut verifier_params = VerifierBenchParam {
             statement: prover_params.statement,
@@ -184,7 +216,10 @@ pub fn stacksig_benchmark(c: &mut Criterion) {
 
         // Benchmark the verifier
         group.bench_with_input(
-            BenchmarkId::new("verifier_bench", &verifier_params),
+            BenchmarkId::new(
+                "verifier_bench",
+                &verifier_params,
+            ),
             &mut verifier_params,
             |b, p| {
                 b.iter(|| {
@@ -200,9 +235,17 @@ pub fn stacksig_benchmark(c: &mut Criterion) {
     }
 
     group.finish();
-    let filename =
-        format!("{}proofsize_plots/stacksig/proofsize{}", plot_dir, ns.len());
-    plot_proofsize(ns, communication_sizes, "Stacking Sigmas".into(), filename);
+    let filename = format!(
+        "{}proofsize_plots/stacksig/proofsize{}",
+        plot_dir,
+        ns.len()
+    );
+    plot_proofsize(
+        ns,
+        communication_sizes,
+        "Stacking Sigmas".into(),
+        filename,
+    );
 }
 
 criterion_group!(benches, stacksig_benchmark);

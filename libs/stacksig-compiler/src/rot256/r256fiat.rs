@@ -1,3 +1,8 @@
+//! This source code file is originally authored by Mathias Hall-Andersen and
+//! licensed under the GPL v3 License. The source code is hosted on
+//! https://github.com/rot256/research-stacksig.
+//!
+//! 29 April 2023 -- Modified by Justin Tan.
 use sha2::{Digest, Sha512};
 
 use std::fmt::Debug;
@@ -6,7 +11,7 @@ use std::marker::PhantomData;
 
 use rand_core::{CryptoRng, RngCore};
 
-use crate::stack::{Challenge, Message, Stackable};
+use super::r256stack::{Challenge, Message, Stackable};
 
 pub struct SignatureScheme<S: Stackable>(PhantomData<S>);
 

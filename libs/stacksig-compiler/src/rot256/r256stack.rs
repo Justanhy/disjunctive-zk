@@ -1,3 +1,8 @@
+//! This source code file is originally authored by Mathias Hall-Andersen and
+//! licensed under the GPL v3 License. The source code is hosted on
+//! https://github.com/rot256/research-stacksig.
+//!
+//! 29 April 2023 -- Modified by Justin Tan.
 use rand_core::{CryptoRng, RngCore};
 
 use std::fmt::Debug;

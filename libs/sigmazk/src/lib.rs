@@ -1,11 +1,11 @@
 //! This crate defines traits related to Sigma Protocols and
 //! includes an implementation of Schnorr's identification
 //! scheme implementing said traits.
-extern crate curve25519_dalek_ml as curve25519_dalek;
 extern crate rand;
 extern crate rand_chacha;
 extern crate rand_core;
 pub mod error;
+pub mod message;
 pub mod schnorr;
 pub mod sigma;
 pub mod zk;
@@ -27,90 +27,96 @@ mod tests {
 
     #[test]
     fn schnorr_works() {
-        let actual_witness =
-            Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
-        let provers_witness =
-            Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
+        let actual_witness = Scalar::random(
+            &mut ChaCha20Rng::from_seed([0u8; 32]),
+        );
+        let provers_witness = Scalar::random(
+            &mut ChaCha20Rng::from_seed([0u8; 32]),
+        );
+
+        let provers_rng =
+            &mut ChaCha20Rng::from_seed([2u8; 32]);
+
+        let verifiers_rng =
+            &mut ChaCha20Rng::from_seed([3u8; 32]);
 
         let protocol = Schnorr::init(actual_witness);
-
-        let prover = SchnorrProver::new(&provers_witness);
-        let verifier = SchnorrVerifier::new();
 
         let (state, commitment) = Schnorr::first(
             &protocol,
             &provers_witness,
-            &mut prover.get_rng(),
-            &(),
+            provers_rng,
         );
 
-        let challenge = Schnorr::second(&mut verifier.get_rng());
+        let challenge = Schnorr::second(verifiers_rng);
 
         let proof = Schnorr::third(
             &protocol,
             state,
             &provers_witness,
             &challenge,
-            &mut prover.get_rng(),
-            &(),
+            provers_rng,
         );
 
-        let result =
-            Schnorr::verify(&protocol, &commitment, &challenge, &proof);
+        let result = Schnorr::verify(
+            &protocol,
+            &commitment,
+            &challenge,
+            &proof,
+        );
         assert!(result);
     }
 
     #[test]
     fn schnorr_fails() {
-        let actual_witness =
-            Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
-        let provers_witness =
-            Scalar::random(&mut ChaCha20Rng::from_seed([1u8; 32]));
+        let actual_witness = Scalar::random(
+            &mut ChaCha20Rng::from_seed([0u8; 32]),
+        );
+        let provers_witness = Scalar::random(
+            &mut ChaCha20Rng::from_seed([1u8; 32]),
+        );
+
+        let provers_rng =
+            &mut ChaCha20Rng::from_seed([2u8; 32]);
+        let verifiers_rng =
+            &mut ChaCha20Rng::from_seed([3u8; 32]);
 
         let protocol = Schnorr::init(actual_witness);
-        let prover = SchnorrProver::new(&provers_witness);
-        let verifier = SchnorrVerifier::new();
 
         let (state, commitment) = Schnorr::first(
             &protocol,
             &provers_witness,
-            &mut prover.get_rng(),
-            &(),
+            provers_rng,
         );
 
-        let challenge = Schnorr::second(&mut verifier.get_rng());
+        let challenge = Schnorr::second(verifiers_rng);
 
         let proof = Schnorr::third(
             &protocol,
             state,
             &provers_witness,
             &challenge,
-            &mut prover.get_rng(),
-            &(),
+            provers_rng,
         );
 
-        let result =
-            Schnorr::verify(&protocol, &commitment, &challenge, &proof);
+        let result = Schnorr::verify(
+            &protocol,
+            &commitment,
+            &challenge,
+            &proof,
+        );
         assert!(!result);
     }
 
     #[test]
     fn schnorr_simulator() {
-        let witness = Scalar::random(&mut ChaCha20Rng::from_seed([0u8; 32]));
-        let protocol = Schnorr::init(witness);
-        let transcript = protocol.simulator();
-        let result = Schnorr::verify(
-            &protocol,
-            &transcript
-                .commitment
-                .expect("Commitment not found"),
-            &transcript
-                .challenge
-                .expect("Challenge not found"),
-            &transcript
-                .proof
-                .expect("Proof not found"),
+        let witness = Scalar::random(
+            &mut ChaCha20Rng::from_seed([0u8; 32]),
         );
+        let protocol = Schnorr::init(witness);
+        let (a, c, z) =
+            <Schnorr as HVzk>::simulate(&protocol);
+        let result = Schnorr::verify(&protocol, &a, &c, &z);
         assert!(result);
     }
 }

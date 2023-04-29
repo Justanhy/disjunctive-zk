@@ -2,7 +2,7 @@ use group::ff::{Field, PrimeField};
 use group::prime::PrimeGroup;
 use group::ScalarMul;
 use rand_core::CryptoRngCore;
-use sigmazk::SigmaProtocol;
+use sigmazk::{Challenge, SigmaProtocol};
 use std::rc::Rc;
 use wrapped_ristretto::CommonField;
 
@@ -86,6 +86,7 @@ pub struct History<G1: PrimeGroup, G2: PrimeGroup, L: Hom<G1::Scalar, G2>> {
     pub past_c: Vec<G1::Scalar>,
 }
 
+#[derive(Clone, Debug)]
 pub struct ComposedStatement<
     G1: PrimeGroup,
     G2: PrimeGroup,
@@ -99,6 +100,7 @@ pub struct ComposedStatement<
     pub g2_public_key: G2, // y_i
 }
 
+#[derive(Clone, Debug)]
 pub struct ComposedA<G1: PrimeGroup, G2: PrimeGroup> {
     pub big_a: G1,
     pub big_b: G1,
@@ -106,11 +108,13 @@ pub struct ComposedA<G1: PrimeGroup, G2: PrimeGroup> {
     pub b: G2,
 }
 
+#[derive(Clone, Debug)]
 pub struct ComposedState<G2: PrimeGroup> {
     pub a: G2,
     pub b: G2,
 }
 
+#[derive(Clone, Debug)]
 pub struct ComposedZ<G1: PrimeGroup, G2: PrimeGroup, L: Hom<G1::Scalar, G2>> {
     pub new_statement: Option<ComposedStatement<G1, G2, L>>,
     pub new_witnesses: Option<Vec<G1::Scalar>>,
@@ -119,6 +123,7 @@ pub struct ComposedZ<G1: PrimeGroup, G2: PrimeGroup, L: Hom<G1::Scalar, G2>> {
 impl<G1, G2, L> SigmaProtocol for CompMechanism<G1, G1::Scalar, G2, L>
 where
     G1: PrimeGroup,
+    G1::Scalar: Challenge,
     G2: PrimeGroup + CommonField<G1>,
     L: Hom<G1::Scalar, G2>,
 {
@@ -130,13 +135,10 @@ where
     type MessageZ = ComposedZ<G1, G2, L>;
     type Challenge = G1::Scalar;
 
-    type ProverContext = ();
-
     fn first<R: CryptoRngCore>(
         statement: &Self::Statement,
         witness: &Self::Witness,
         prover_rng: &mut R,
-        _prover_context: &Self::ProverContext,
     ) -> (Self::State, Self::MessageA)
     where
         Self: Sized,
@@ -185,7 +187,6 @@ where
         witness: &Self::Witness,
         challenge: &Self::Challenge,
         prover_rng: &mut R,
-        prover_context: &Self::ProverContext,
     ) -> Self::MessageZ
     where
         Self: Sized,

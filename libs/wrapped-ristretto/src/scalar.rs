@@ -7,6 +7,7 @@ use group::{Group, GroupEncoding};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rand_core::CryptoRngCore;
+use sigmazk::Challenge;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
@@ -436,5 +437,17 @@ impl From<WrappedScalar> for Scalar {
 impl From<Scalar> for WrappedScalar {
     fn from(s: Scalar) -> WrappedScalar {
         Self(s)
+    }
+}
+
+impl From<[u8; 32]> for WrappedScalar {
+    fn from(bytes: [u8; 32]) -> WrappedScalar {
+        Self(Scalar::from_bytes_mod_order(bytes))
+    }
+}
+
+impl Challenge for WrappedScalar {
+    fn new(bytes: &[u8; 64]) -> Self {
+        Self(Scalar::from_bytes_mod_order_wide(bytes))
     }
 }

@@ -64,15 +64,10 @@ mod tests {
 
         let prover_rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
         let (state, message_a) =
-            Base25519::first(&statement, &witness, prover_rng, &());
+            Base25519::first(&statement, &witness, prover_rng);
         let challenge = Base25519::second(&mut ChaCha20Rng::from_entropy());
         let message_z = Base25519::third(
-            &statement,
-            state,
-            &witness,
-            &challenge,
-            prover_rng,
-            &(),
+            &statement, state, &witness, &challenge, prover_rng,
         );
         assert!(Base25519::verify(
             &statement, &message_a, &challenge, &message_z
@@ -101,7 +96,7 @@ mod tests {
 
         let prover_rng = &mut ChaCha20Rng::from_seed([0u8; 32]);
         let (state, message_a) =
-            Base25519::first(&statement, &false_witness, prover_rng, &());
+            Base25519::first(&statement, &false_witness, prover_rng);
         let challenge = Base25519::second(&mut ChaCha20Rng::from_entropy());
         let message_z = Base25519::third(
             &statement,
@@ -109,7 +104,6 @@ mod tests {
             &false_witness,
             &challenge,
             prover_rng,
-            &(),
         );
         assert!(!Base25519::verify(
             &statement, &message_a, &challenge, &message_z

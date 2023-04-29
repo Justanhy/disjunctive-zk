@@ -26,6 +26,10 @@ name = "cds_benchmark"
 harness = false
 
 [[bench]]
+name = "cds_benchmark2"
+harness = false
+
+[[bench]]
 name = "stacksig_benchmark"
 harness = false
 

@@ -1,31 +1,32 @@
+use crate::shamir_error::ShamirError;
 use core::ops::{AddAssign, Mul};
-use elliptic_curve::ff::PrimeField;
+use group::ff::PrimeField;
 use rand_core::CryptoRngCore;
 
-pub enum LagrangeError {
-    InvalidCoordinateSizes,
-}
-
 /// The polynomial used for generating the shares
+#[derive(Clone, Debug)]
 pub struct LagrangePolynomial<F: PrimeField> {
     x_coordinates: Vec<F>,
     y_coordinates: Vec<F>,
 }
 
 impl<F: PrimeField> LagrangePolynomial<F> {
-    pub fn check_coordinates(
-        xs: &Vec<F>,
-        ys: &Vec<F>,
-    ) -> Result<(), LagrangeError> {
-        if xs.len() != ys.len() {
-            return Err(LagrangeError::InvalidCoordinateSizes);
-        }
-        Ok(())
-    }
-    /// Initialise a polynomial with the given initialisation
-    pub fn init(x_coordinates: Vec<F>, y_coordinates: Vec<F>) -> Self {
-        if Self::check_coordinates(&x_coordinates, &y_coordinates).is_err() {
-            panic!("x and y coordinates must be the same length");
+    /// Initialise a random polynomial given only the
+    /// y-intercept
+    #[cfg_attr(coverage_nightly, no_coverage)]
+    pub fn new<R: CryptoRngCore>(
+        y_intercept: F,
+        size: usize,
+        rng: &mut R,
+    ) -> Self {
+        let x_coordinates: Vec<F> = (0..=size)
+            .map(|i| F::from(i as u64))
+            .collect();
+        let mut y_coordinates: Vec<F> =
+            Vec::with_capacity(size);
+        y_coordinates.push(y_intercept);
+        for _ in 1..=size {
+            y_coordinates.push(F::random(&mut *rng));
         }
         Self {
             x_coordinates,
@@ -33,24 +34,21 @@ impl<F: PrimeField> LagrangePolynomial<F> {
         }
     }
 
-    /// Initialise a polynomial with the given initialisation,
-    /// filling in missing y coordinates
-    pub fn filling_init(
+    /// Initialise a polynomial with the given
+    /// initialisation
+    pub fn init(
         x_coordinates: Vec<F>,
-        y_coordinates: Vec<Option<F>>,
-        mut rng: &mut impl CryptoRngCore,
-    ) -> Self {
-        let mut ys = vec![F::default(); y_coordinates.len()];
-        for (i, c) in ys
-            .iter_mut()
-            .enumerate()
-        {
-            match y_coordinates[i] {
-                Some(v) => *c = v,
-                None => *c = F::random(&mut rng),
-            }
+        y_coordinates: Vec<F>,
+    ) -> Result<Self, ShamirError> {
+        if x_coordinates.len() != y_coordinates.len() {
+            return Err(
+                ShamirError::InvalidCoordinateSizes,
+            );
         }
-        Self::init(x_coordinates, ys)
+        Ok(Self {
+            x_coordinates,
+            y_coordinates,
+        })
     }
 
     pub fn interpolate(&self, x: F) -> F {
@@ -62,16 +60,19 @@ impl<F: PrimeField> LagrangePolynomial<F> {
     }
 
     /// Interpolate a polynomial using the given points
-    pub fn lagrange_interpolation<S>(xs: &[F], ys: &[S], x: F) -> S
+    pub fn lagrange_interpolation<S>(
+        xs: &[F],
+        ys: &[S],
+        x: F,
+    ) -> S
     where
-        F: PrimeField,
         S: Default + Copy + AddAssign + Mul<F, Output = S>,
     {
         let limit = xs.len();
         let mut result = S::default();
         for i in 0..limit {
-            let mut num = F::one();
-            let mut denom = F::one();
+            let mut num = F::ONE;
+            let mut denom = F::ONE;
             for j in 0..limit {
                 if i == j {
                     continue;
@@ -89,72 +90,36 @@ impl<F: PrimeField> LagrangePolynomial<F> {
     }
 }
 
-// pub struct LagrangePolynomial<F: PrimeField, const N: usize> {
-//     x_coordinates: [F; N],
-//     y_coordinates: [F; N],
-// }
+#[cfg(test)]
+mod polynomial_tests {
+    use crate::lagrange::LagrangePolynomial;
+    use curve25519_dalek::scalar::Scalar;
+    use wrapped_ristretto::scalar::WrappedScalar;
 
-// impl<F: PrimeField, const N: usize> LagrangePolynomial<F, N> {
-//     /// Initialise a polynomial with the given initialisation
-//     pub fn init(x_coordinates: [F; N], y_coordinates: [F; N]) -> Self {
-//         Self {
-//             x_coordinates,
-//             y_coordinates,
-//         }
-//     }
+    #[test]
+    fn interpolate_works() {
+        let xs = vec![
+            WrappedScalar::from(1u64),
+            WrappedScalar::from(2u64),
+            WrappedScalar::from(5u64),
+        ];
 
-//     /// Initialise a polynomial with the given initialisation,
-//     /// filling in missing y coordinates
-//     pub fn filling_init(
-//         x_coordinates: [F; N],
-//         y_coordinates: [Option<F>; N],
-//         mut rng: &mut impl CryptoRngCore,
-//     ) -> Self {
-//         let mut ys = [F::default(); N];
-//         for (i, c) in ys
-//             .iter_mut()
-//             .enumerate()
-//         {
-//             match y_coordinates[i] {
-//                 Some(v) => *c = v,
-//                 None => *c = F::random(&mut rng),
-//             }
-//         }
-//         Self::init(x_coordinates, ys)
-//     }
+        let ys = vec![
+            WrappedScalar::from(1u64),
+            WrappedScalar::from(24u64),
+            WrappedScalar(Scalar::from_bytes_mod_order([
+                66, 211, 245, 92, 26, 99, 18, 88, 214, 156,
+                247, 162, 222, 249, 222, 20, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16,
+            ])),
+        ];
 
-//     pub fn interpolate(&self, x: F) -> F {
-//         Self::lagrange_interpolation(
-//             &self.x_coordinates,
-//             &self.y_coordinates,
-//             x,
-//         )
-//     }
+        let poly =
+            LagrangePolynomial::init(xs, ys).unwrap();
 
-//     /// Interpolate a polynomial using the given points
-//     pub fn lagrange_interpolation<S>(xs: &[F], ys: &[S], x: F) -> S
-//     where
-//         F: PrimeField,
-//         S: Default + Copy + AddAssign + Mul<F, Output = S>,
-//     {
-//         let limit = xs.len();
-//         let mut result = S::default();
-//         for i in 0..limit {
-//             let mut num = F::one();
-//             let mut denom = F::one();
-//             for j in 0..limit {
-//                 if i == j {
-//                     continue;
-//                 }
-//                 num *= x - xs[j];
-//                 denom *= xs[i] - xs[j];
-//             }
-//             result += ys[i]
-//                 * num
-//                 * denom
-//                     .invert()
-//                     .unwrap();
-//         }
-//         result
-//     }
-// }
+        let res =
+            poly.interpolate(WrappedScalar::from(3u64));
+
+        debug_assert_eq!(res, WrappedScalar::from(3u64));
+    }
+}

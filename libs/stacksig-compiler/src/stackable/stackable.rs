@@ -24,16 +24,12 @@ impl Message for &[u8] {
     }
 }
 
-pub trait Challenge {
-    fn new(bytes: &[u8; 64]) -> Self;
-}
-
 pub trait Randomizable {
     fn randomize<R: CryptoRngCore>(&mut self, rng: &mut R);
 }
 
 pub trait Stackable:
-    SigmaProtocol<MessageA: Message, MessageZ: Message, Challenge: Challenge>
+    SigmaProtocol<MessageA: Message, MessageZ: Message>
     + EHVzk
     + Clone
 {

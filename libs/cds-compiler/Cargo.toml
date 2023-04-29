@@ -8,9 +8,9 @@ edition = "2021"
 [dependencies]
 sigmazk = { path = "../sigmazk" }
 shamir_ss = { path = "../shamir_ss" }
-curve25519-dalek-ml = "4.0.0-pre.2"
+curve25519-dalek = { version = "4.0.0-rc.0", features = ["rand_core", "digest"] }
+wrapped-ristretto = { path = "../wrapped-ristretto" }
 rand_chacha = "0.3"
 rand_core = "0.6"
-blsttc = "8.0.0"
 itertools = "0.10.5"
-
+group = "0.13.0"

@@ -5,12 +5,13 @@ use std::rc::Rc;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use rand_core::CryptoRngCore;
-use sigmazk::{EHVzk, SigmaProtocol};
+use sigmazk::{Challenge, EHVzk, SigmaProtocol};
 
 use crate::commitment_scheme::halfbinding::Commitment;
 pub use crate::commitment_scheme::qbinding::*;
-use crate::stackable::{Challenge, Message, Stackable};
+use crate::stackable::{Message, Stackable};
 
+#[derive(Clone)]
 pub struct StackedStatement<S: Stackable> {
     pp: PublicParams,
     height: usize,
@@ -73,17 +74,23 @@ impl<S: Stackable> StackedStatement<S> {
         &self.statements
     }
 
-    pub fn bound_statement(&self, binding: &BindingIndex) -> &S::Statement {
+    pub fn bound_statement(
+        &self,
+        binding: &BindingIndex,
+    ) -> &S::Statement {
         &self.statements[binding.index()]
     }
 
-    pub fn statement_at(&self, index: usize) -> Option<&S::Statement> {
+    pub fn statement_at(
+        &self,
+        index: usize,
+    ) -> Option<&S::Statement> {
         self.statements
             .get(index)
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StackedWitness<W> {
     nested_witness: W,
     binding: BindingIndex,
@@ -103,7 +110,10 @@ impl<W: fmt::Display> fmt::Display for StackedWitness<W> {
 }
 
 impl<W> StackedWitness<W> {
-    pub fn init(nested_witness: W, binding: BindingIndex) -> Self {
+    pub fn init(
+        nested_witness: W,
+        binding: BindingIndex,
+    ) -> Self {
         StackedWitness {
             nested_witness,
             binding,
@@ -111,7 +121,7 @@ impl<W> StackedWitness<W> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct StackedZ<S: Stackable> {
     ck: CommitKey,
     message: S::MessageZ,
@@ -119,25 +129,36 @@ pub struct StackedZ<S: Stackable> {
 }
 
 impl<S: Stackable> StackedZ<S> {
-    pub fn new(ck: CommitKey, message: S::MessageZ, aux: Randomness) -> Self {
+    #[cfg_attr(coverage_nightly, no_coverage)]
+    pub fn new(
+        ck: CommitKey,
+        message: S::MessageZ,
+        aux: Randomness,
+    ) -> Self {
         StackedZ { ck, message, aux }
     }
 
+    #[cfg_attr(coverage_nightly, no_coverage)]
     pub fn ck(&self) -> &CommitKey {
         &self.ck
     }
 
+    #[cfg_attr(coverage_nightly, no_coverage)]
     pub fn message(&self) -> &S::MessageZ {
         &self.message
     }
 
+    #[cfg_attr(coverage_nightly, no_coverage)]
     pub fn aux(&self) -> &Randomness {
         &self.aux
     }
 }
 
 impl<S: Stackable> fmt::Debug for StackedZ<S> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         f.debug_struct("StackedZ")
             .field("ck (CommitKey)", &self.ck)
             .field("z (MessageZ)", &self.message)
@@ -151,7 +172,10 @@ impl<S: Stackable> Default for StackedZ<S> {
         StackedZ {
             ck: CommitKey::default(),
             message: S::MessageZ::default(),
-            aux: Randomness::random(&mut ChaCha20Rng::from_entropy(), 1),
+            aux: Randomness::random(
+                &mut ChaCha20Rng::from_entropy(),
+                1,
+            ),
         }
     }
 }
@@ -165,7 +189,7 @@ impl<S: Stackable> Message for StackedZ<S> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StackedState<S: Stackable> {
     nested_state: S::State,
     bound_message: Rc<S::MessageA>,
@@ -187,6 +211,22 @@ impl Message for StackedA {
     }
 }
 
+#[test]
+fn test_traits_stacked_a() {
+    // Test message for stacked A
+    let rng = ChaCha20Rng::from_seed([0u8; 32]);
+    let ck = CommitKey::default();
+    let commitment =
+        Commitment(rng.get_seed(), rng.get_seed());
+    let stacked_a = StackedA::default();
+    let stacked_a2 = StackedA(ck, commitment);
+    let mut buf = Vec::new();
+    stacked_a2.write(&mut buf);
+    let mut buf2 = Vec::new();
+    stacked_a.write(&mut buf2);
+    assert_eq!(buf, buf2);
+}
+
 #[derive(Clone, Debug)]
 pub struct SelfStacker<S: Stackable> {
     clauses: usize, // number of clauses being composed
@@ -200,6 +240,7 @@ impl<S: Stackable> SelfStacker<S> {
         let q = (clauses as f64)
             .log2()
             .ceil() as usize;
+        dbg!(q);
 
         SelfStacker {
             clauses: 1 << q,
@@ -219,13 +260,6 @@ impl<S: Stackable> SelfStacker<S> {
     pub fn q(&self) -> usize {
         self.q
     }
-
-    pub fn initial_messages(clauses: usize) -> Vec<Rc<S::MessageA>> {
-        let default = Rc::new(S::MessageA::default());
-        (0..clauses)
-            .map(|_| default.clone())
-            .collect()
-    }
 }
 
 impl<S: Stackable> Stackable for SelfStacker<S> {}
@@ -240,7 +274,13 @@ impl<S: Stackable> EHVzk for SelfStacker<S> {
         let v: Vec<Rc<S::MessageA>> = statement
             .statements()
             .iter()
-            .map(|s| Rc::new(S::simulate(s, challenge, z.message())))
+            .map(|s| {
+                Rc::new(S::simulate(
+                    s,
+                    challenge,
+                    z.message(),
+                ))
+            })
             .collect();
 
         let comm = QBinding::new(statement.height()).bind(
@@ -257,6 +297,7 @@ impl<S: Stackable> EHVzk for SelfStacker<S> {
     }
 }
 
+/// Sigma protocol implementation for self-stacking compiler
 impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
     type Statement = StackedStatement<S>;
     type Witness = StackedWitness<S::Witness>;
@@ -264,54 +305,63 @@ impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
     type MessageA = StackedA;
     type Challenge = S::Challenge;
     type MessageZ = StackedZ<S>;
-    type ProverContext = S::ProverContext;
 
-    fn first<R: CryptoRngCore>(
+    /// First round of the protocol
+    fn first<R: CryptoRngCore + Clone>(
         statement: &StackedStatement<S>,
         witness: &StackedWitness<S::Witness>,
         prover_rng: &mut R,
-        prover_context: &S::ProverContext,
     ) -> (Self::State, Self::MessageA) {
+        // Deconstruct witness
         let StackedWitness {
             nested_witness,
             binding,
         } = witness;
 
+        // First call the underlying protocol with the statement at the active clause
         let (nested_state, bound_message) = S::first(
             statement.bound_statement(binding),
             nested_witness,
             prover_rng,
-            prover_context,
         );
-        // Instance of partial binding commitment scheme that we
-        // will use
+        // Instance of partial binding commitment scheme that we will use
         let q = statement.height();
-        let qbinding = QBinding::new(q); // TODO: test height
+        let qbinding = QBinding::new(q);
+        // Instantiate pointer to the message from the active clause
         let bound_message = Rc::new(bound_message);
 
         // Determine our message vector
         let def = Rc::new(S::MessageA::default());
-        let initial_messages: Vec<Rc<S::MessageA>> = (0..statement.clauses())
+        let initial_messages: Vec<Rc<S::MessageA>> = (0
+            ..statement.clauses())
             .map(|i| {
+                // If active clause, we use the message from earlier
                 if i == binding.index() {
                     bound_message.clone()
                 } else {
+                    // Otherwise we use the default message
                     def.clone()
                 }
             })
             .collect();
 
-        // Here we compute commitment key and equivocation key for
-        // the protocol. We appear to reuse the same
-        // prover_rng but it is mutated and thus different.
-        // Still, the change is deterministic.
-        let (ck, ek) = qbinding.gen(&statement.pp, *binding, prover_rng);
+        // Here we compute commitment key and equivocation key for the protocol. We appear to reuse the same
+        // prover_rng but it is mutated and thus different. Still, the change is deterministic.
+        let (ck, ek) = qbinding.gen(
+            &statement.pp,
+            *binding,
+            prover_rng,
+        );
 
         // Derive auxiliary value from prover's rng
         let aux = Randomness::random(prover_rng, q);
         // Compute commitment
-        let (comm, aux) =
-            qbinding.equivcom(&statement.pp, &ek, &initial_messages, Some(aux));
+        let (comm, aux) = qbinding.equivcom(
+            &statement.pp,
+            &ek,
+            &initial_messages,
+            Some(aux),
+        );
 
         (
             StackedState {
@@ -326,7 +376,10 @@ impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
         )
     }
 
-    fn second<R: CryptoRngCore>(verifier_rng: &mut R) -> Self::Challenge
+    /// Second round of the protocol. Random challenge.
+    fn second<R: CryptoRngCore>(
+        verifier_rng: &mut R,
+    ) -> Self::Challenge
     where
         Self: Sized,
     {
@@ -335,14 +388,15 @@ impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
         Challenge::new(&buffer)
     }
 
-    fn third<R: CryptoRngCore>(
+    /// Third round of the protocol.
+    fn third<R: CryptoRngCore + Clone>(
         statement: &Self::Statement,
         state: Self::State,
         witness: &Self::Witness,
         challenge: &Self::Challenge,
         prover_rng: &mut R,
-        prover_context: &S::ProverContext,
     ) -> Self::MessageZ {
+        // Deconstruct the state struct
         let StackedState {
             nested_state,
             bound_message,
@@ -352,26 +406,30 @@ impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
             aux,
         } = state;
 
+        // Deconstruct the witness struct
         let StackedWitness {
             nested_witness,
             binding,
         } = witness;
         let qbinding = QBinding::new(statement.height());
 
+        // Call third round algorithm of underlying protocol
         let nested_z = S::third(
             statement.bound_statement(binding),
             nested_state,
             nested_witness,
             challenge,
             prover_rng,
-            prover_context,
         );
 
-        let new_messages: Vec<Rc<S::MessageA>> = (0..statement.clauses())
+        let new_messages: Vec<Rc<S::MessageA>> = (0
+            ..statement.clauses())
             .map(|i| {
+                // Same as earlier, if active clause, we use the message from first round
                 if i == binding.index() {
                     bound_message.clone()
                 } else {
+                    // Otherwise, we need to simulate the first message from statement, challenge and z from earlier
                     Rc::new(S::simulate(
                         statement
                             .statement_at(i)
@@ -383,6 +441,8 @@ impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
             })
             .collect();
 
+        // Equivocate the initial vector of messages with new messages
+        // obtaining new auxiliary value
         let aux_new = qbinding.equiv(
             &statement.pp,
             &ek,
@@ -390,6 +450,7 @@ impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
             &new_messages,
             &aux,
         );
+
         StackedZ {
             ck,
             message: nested_z,
@@ -397,6 +458,7 @@ impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
         }
     }
 
+    /// Verification algorithm for the protocol
     fn verify(
         statement: &Self::Statement,
         a: &Self::MessageA,
@@ -406,25 +468,29 @@ impl<S: Stackable> SigmaProtocol for SelfStacker<S> {
     where
         Self: Sized,
     {
+        // Deconstruct variables from structs
+        // Here we get the commitment key, and commitment from first round of stacking protocol
         let StackedA(ck_a, comm) = a;
+        // Here we get the commitment key, messages, and aux variable from the third round of stacker
         let StackedZ {
             ck: ck_z,
             message,
             aux,
         } = z;
 
+        // Now we go through every statement and simulate with the recyclable third round message
+        // and challenge from 2nd round
         let v: Vec<Rc<S::MessageA>> = statement
             .statements()
             .iter()
             .map(|s| Rc::new(S::simulate(s, c, &message)))
             .collect();
 
-        let comm_check = QBinding::new(statement.height()).bind(
-            &statement.pp,
-            ck_a,
-            &v,
-            aux,
-        );
+        // Using bindcom algorithm, we compute the commitment to this vector of messages
+        let comm_check = QBinding::new(statement.height())
+            .bind(&statement.pp, ck_a, &v, aux);
+
+        // Now we want to verify that the messages are valid for every clause
         let nested_check = statement
             .statements()
             .iter()

@@ -1,0 +1,18 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "editor.fontFamily": "Fira Code, Consolas, 'Courier New', monospace",
+    "editor.formatOnSave": true,
+    "window.zoomLevel": 0,
+    "editor.tabSize": 4,
+    "python.formatting.provider": "black",
+    "python.formatting.blackArgs": ["--line-length", "79"],
+    "rust-analyzer.showUnlinkedFileNotification": false,
+    "rust-analyzer.inlayHints.chainingHints.enable": true,
+    "rust-analyzer.inlayHints.typeHints.enable": true
+  }
+}

@@ -1,11 +1,11 @@
 //! Traits for Zero Knowledge
-use crate::{SigmaProtocol, SigmaTranscript};
 
-pub trait ZeroKnowledge {
-    type Input;
-    type Output: SigmaTranscript;
+use crate::SigmaProtocol;
 
-    fn simulate(args: Self::Input) -> Self::Output;
+pub trait HVzk: SigmaProtocol {
+    fn simulate(
+        statement: &Self::Statement,
+    ) -> (Self::MessageA, Self::Challenge, Self::MessageZ);
 }
 
 /// Extended Honest-Verifier Zero Knowledge

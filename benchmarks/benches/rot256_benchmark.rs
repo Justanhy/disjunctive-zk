@@ -1,10 +1,14 @@
 use criterion::{
-    black_box, criterion_group, criterion_main, Bencher, BenchmarkId,
-    Criterion, Throughput,
+    black_box, criterion_group, criterion_main, Bencher,
+    BenchmarkId, Criterion, Throughput,
 };
 
-use stacksig_compiler::compiler::*;
-use stacksig_compiler::{fiat, schnorr, Side};
+use stacksig_compiler::rot256::r256compiler::{
+    Compiled, CompiledStatement, CompiledWitness,
+};
+use stacksig_compiler::rot256::{
+    r256fiat, r256schnorr, Side, *,
+};
 
 use rand_core::OsRng;
 
@@ -12,7 +16,7 @@ use curve25519_dalek::constants::RISTRETTO_BASEPOINT_TABLE;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 
-type S2 = Compiled<schnorr::Schnorr>;
+type S2 = Compiled<r256schnorr::Schnorr>;
 type S4 = Compiled<S2>;
 type S8 = Compiled<S4>;
 type S16 = Compiled<S8>;
@@ -30,23 +34,23 @@ type S32768 = Compiled<S16384>;
 type S65536 = Compiled<S32768>;
 type S131072 = Compiled<S65536>;
 
-pub type Sig2 = fiat::SignatureScheme<S2>;
-pub type Sig4 = fiat::SignatureScheme<S4>;
-pub type Sig8 = fiat::SignatureScheme<S8>;
-pub type Sig16 = fiat::SignatureScheme<S16>;
-pub type Sig32 = fiat::SignatureScheme<S32>;
-pub type Sig64 = fiat::SignatureScheme<S64>;
-pub type Sig128 = fiat::SignatureScheme<S128>;
-pub type Sig256 = fiat::SignatureScheme<S256>;
-pub type Sig512 = fiat::SignatureScheme<S512>;
-pub type Sig1024 = fiat::SignatureScheme<S1024>;
-pub type Sig2048 = fiat::SignatureScheme<S2048>;
-pub type Sig4096 = fiat::SignatureScheme<S4096>;
-pub type Sig8192 = fiat::SignatureScheme<S8192>;
-pub type Sig16384 = fiat::SignatureScheme<S16384>;
-pub type Sig32768 = fiat::SignatureScheme<S32768>;
-pub type Sig65536 = fiat::SignatureScheme<S65536>;
-pub type Sig131072 = fiat::SignatureScheme<S131072>;
+pub type Sig2 = r256fiat::SignatureScheme<S2>;
+pub type Sig4 = r256fiat::SignatureScheme<S4>;
+pub type Sig8 = r256fiat::SignatureScheme<S8>;
+pub type Sig16 = r256fiat::SignatureScheme<S16>;
+pub type Sig32 = r256fiat::SignatureScheme<S32>;
+pub type Sig64 = r256fiat::SignatureScheme<S64>;
+pub type Sig128 = r256fiat::SignatureScheme<S128>;
+pub type Sig256 = r256fiat::SignatureScheme<S256>;
+pub type Sig512 = r256fiat::SignatureScheme<S512>;
+pub type Sig1024 = r256fiat::SignatureScheme<S1024>;
+pub type Sig2048 = r256fiat::SignatureScheme<S2048>;
+pub type Sig4096 = r256fiat::SignatureScheme<S4096>;
+pub type Sig8192 = r256fiat::SignatureScheme<S8192>;
+pub type Sig16384 = r256fiat::SignatureScheme<S16384>;
+pub type Sig32768 = r256fiat::SignatureScheme<S32768>;
+pub type Sig65536 = r256fiat::SignatureScheme<S65536>;
+pub type Sig131072 = r256fiat::SignatureScheme<S131072>;
 
 macro_rules! compile {
     ($pks:expr, $sk:expr) => {{
@@ -115,31 +119,19 @@ macro_rules! compilen {
         let (pk, sk) = compile!($pks, $sk);
         compilen!(12, pk, sk)
     }};
-    (14, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(13, pk, sk)
-    }};
-    (15, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(14, pk, sk)
-    }};
-    (16, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(15, pk, sk)
-    }};
-    (17, $pks:expr, $sk:expr) => {{
-        let (pk, sk) = compile!($pks, $sk);
-        compilen!(16, pk, sk)
-    }};
 }
 
 macro_rules! bench_scheme {
     ($b:expr, $n:tt, $s:tt) => {{
         let sk = Scalar::random(&mut OsRng);
-        let mut pk: Vec<RistrettoPoint> = Vec::with_capacity(1 << $n);
+        let mut pk: Vec<RistrettoPoint> =
+            Vec::with_capacity(1 << $n);
         pk.push(&sk * RISTRETTO_BASEPOINT_TABLE);
         for _ in 1..(1 << $n) {
-            pk.push(&Scalar::random(&mut OsRng) * RISTRETTO_BASEPOINT_TABLE);
+            pk.push(
+                &Scalar::random(&mut OsRng)
+                    * RISTRETTO_BASEPOINT_TABLE,
+            );
         }
         let (pk, sk) = compilen!($n, pk, sk);
         $b.iter(|| {
@@ -205,28 +197,15 @@ fn bench_sig8192(b: &mut Bencher) {
     bench_scheme!(b, 13, Sig8192);
 }
 
-fn bench_sig16384(b: &mut Bencher) {
-    bench_scheme!(b, 14, Sig16384);
-}
-
-fn bench_sig32768(b: &mut Bencher) {
-    bench_scheme!(b, 15, Sig32768);
-}
-
-fn bench_sig65536(b: &mut Bencher) {
-    bench_scheme!(b, 16, Sig65536);
-}
-
-fn bench_sig131072(b: &mut Bencher) {
-    bench_scheme!(b, 17, Sig131072);
-}
-
 pub fn rot256_benchmark(c: &mut Criterion) {
-    const N: usize = 12;
+    const N: usize = 13;
     let mut ns: [usize; N] = [0; N];
     for i in 1..=N {
         ns[i - 1] = 1 << i;
     }
+
+    let mut communication_size: Vec<usize> =
+        Vec::with_capacity(N);
 
     let mut group = c.benchmark_group("rot256_benchmark");
     group.throughput(Throughput::Elements(ns[0] as u64));
@@ -253,16 +232,8 @@ pub fn rot256_benchmark(c: &mut Criterion) {
     group.bench_function("sig2048", bench_sig2048);
     group.throughput(Throughput::Elements(ns[11] as u64));
     group.bench_function("sig4096", bench_sig4096);
-    // group.throughput(Throughput::Elements(ns[12] as u64));
-    // group.bench_function("sig8192", bench_sig8192);
-    // group.throughput(Throughput::Elements(ns[13] as u64));
-    // group.bench_function("sig16384", bench_sig16384);
-    // group.throughput(Throughput::Elements(ns[14] as u64));
-    // group.bench_function("sig32768", bench_sig32768);
-    // group.throughput(Throughput::Elements(ns[15] as u64));
-    // group.bench_function("sig65536", bench_sig65536);
-    // group.throughput(Throughput::Elements(ns[16] as u64));
-    // group.bench_function("sig131072", bench_sig131072);
+    group.throughput(Throughput::Elements(ns[12] as u64));
+    group.bench_function("sig8192", bench_sig8192);
     group.finish();
 }
 

@@ -1,8 +1,13 @@
-use crate::commitment_scheme::rot256::{
+//! This source code file is originally authored by Mathias Hall-Andersen and
+//! licensed under the GPL v3 License. The source code is hosted on
+//! https://github.com/rot256/research-stacksig.
+//!
+//! 29 April 2023 -- Modified by Justin Tan.
+use super::r256comm::{
     CommitKey, Commitment, Randomness, Trapdoor,
 };
-use crate::stack::*;
-use crate::Side;
+use super::r256stack::*;
+use super::Side;
 
 use std::io::Write;
 
@@ -41,10 +46,16 @@ impl<M: Message> Message for CompiledMessageZ<M> {
     }
 }
 
-pub struct CompiledStatement<S: Stackable>(S::Statement, S::Statement);
+pub struct CompiledStatement<S: Stackable>(
+    S::Statement,
+    S::Statement,
+);
 
 impl<S: Stackable> CompiledStatement<S> {
-    pub fn new(left: S::Statement, right: S::Statement) -> Self {
+    pub fn new(
+        left: S::Statement,
+        right: S::Statement,
+    ) -> Self {
         CompiledStatement(left, right)
     }
 
@@ -71,7 +82,10 @@ pub struct CompiledWitness<W> {
 }
 
 impl<W> CompiledWitness<W> {
-    pub fn new(witness: W, side: Side) -> CompiledWitness<W> {
+    pub fn new(
+        witness: W,
+        side: Side,
+    ) -> CompiledWitness<W> {
         CompiledWitness { witness, side }
     }
 }
@@ -129,12 +143,16 @@ impl<S: Stackable> Stackable for Compiled<S> {
         let (ck, td) = CommitKey::gen(rng, witness.side);
         let rd = Randomness::random(rng);
         let comm = match witness.side {
-            Side::Left => {
-                ck.commit::<S::MessageA, S::MessageA>(&rd, (Some(&a), None))
-            }
-            Side::Right => {
-                ck.commit::<S::MessageA, S::MessageA>(&rd, (None, Some(&a)))
-            }
+            Side::Left => ck
+                .commit::<S::MessageA, S::MessageA>(
+                    &rd,
+                    (Some(&a), None),
+                ),
+            Side::Right => ck
+                .commit::<S::MessageA, S::MessageA>(
+                    &rd,
+                    (None, Some(&a)),
+                ),
         };
 
         // first message is just a commitment
@@ -159,8 +177,12 @@ impl<S: Stackable> Stackable for Compiled<S> {
                 );
 
                 // simulate the right side
-                let a_right =
-                    S::ehvzk(&precomp, statement.right(), challenge, &z);
+                let a_right = S::ehvzk(
+                    &precomp,
+                    statement.right(),
+                    challenge,
+                    &z,
+                );
 
                 // equivocate on the right side
                 let rd = state
@@ -190,8 +212,12 @@ impl<S: Stackable> Stackable for Compiled<S> {
                 );
 
                 // simulate the right side
-                let a_left =
-                    S::ehvzk(&precomp, statement.left(), challenge, &z);
+                let a_left = S::ehvzk(
+                    &precomp,
+                    statement.left(),
+                    challenge,
+                    &z,
+                );
 
                 // equivocate on the left side
                 let rd = state
@@ -221,8 +247,18 @@ impl<S: Stackable> Stackable for Compiled<S> {
         challenge: &Self::Challenge,
         z: &Self::MessageZ,
     ) -> Self::MessageA {
-        let left = S::ehvzk(&precomp, statement.left(), challenge, &z.z);
-        let right = S::ehvzk(&precomp, statement.right(), challenge, &z.z);
+        let left = S::ehvzk(
+            &precomp,
+            statement.left(),
+            challenge,
+            &z.z,
+        );
+        let right = S::ehvzk(
+            &precomp,
+            statement.right(),
+            challenge,
+            &z.z,
+        );
         z.ck.commit(&z.rd, (Some(&left), Some(&right)))
     }
 }

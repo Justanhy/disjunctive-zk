@@ -4,7 +4,7 @@ This project compares the performance of the general disjunctive zero-knowledge 
 
 ## Other works used in this project
 
-We make use of Mathias Hall-Andersen's implementation of the Stacking Sigmas compiler in our benchmarks to compare the performance of our implementations with his. We have modified some of the original source code and everything relating to his implementation can be found in the `libs/stacksig-compiler/src/rot256` folder. His original work is hosted on Github at https://github.com/rot256/research-stacksig under the GPL v3 License (the same as ours).
+We make use of Mathias Hall-Andersen's implementation of the Stacking Sigmas compiler in our benchmarks to compare the performance of our implementations with theirs. We have modified some of the original source code and everything relating to their implementation can be found in the `libs/stacksig-compiler/src/rot256` folder. Their original work is hosted on Github at https://github.com/rot256/research-stacksig under the GPL v3 License (the same as ours).
 
 ## Running Tests
 
